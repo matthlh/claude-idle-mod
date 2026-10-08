@@ -337,133 +337,107 @@ const CRACKS: [number, number][][] = [
   [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
 ]
 export type Palette = Record<string, number>
-// The desktop character: a hooded portrait, 44×56 at one CSS pixel per cell,
-// generated from shape primitives (see docs/portrait.py in the repo). Frame B blinks.
+// The desktop character: a 22×28 chibi with long orange hair, drawn at two
+// CSS pixels per cell. A rests, B bobs with the hair swaying, C blinks.
 const PORTRAIT_A = [
-  '............................................',
-  '................OOOOOOOOOOOO................',
-  '.............OOOgggGGGGGGGGGOOO.............',
-  '...........OOgggggggGGGGGGGGGGGOO...........',
-  '..........OgggggggggGGGGGGGGGGGGGO..........',
-  '.........OggggggggggGGGGGGGGGGGGggg.........',
-  '........OgggggggggggGGGGGGGGGGGGGOOO........',
-  '.......OgggggggggOOOOOOOOOOGGGGGGGGOO.......',
-  '......OggggggggOOiHHHHiHHHHOOGGGGGGGOO......',
-  '.....OggggggggOHiHHHHiHHHHiHHOGGGGGGOGO.....',
-  '....OggggggggOHiHHHHiHHHHiHHHHOGGGGGOGGO....',
-  '....OgggggggOHiHHHHiHHHHiHHHHiHOGGGOGGGO....',
-  '...OgggggggOHHHHHHHHHHHHHHHHHHHHOGGGGGGGO...',
-  '...OggggggOHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO...',
-  '..OGgggggOSHHHHHHHHHHHHHHHHHHHHHHSOGGGGGGO..',
-  '..OGgggggOHHHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO..',
-  '..OGggggOSHHHHHHHHHiHHHHHHHHHHHHHHSOGGGGGO..',
-  '..OGggggOhhhhHHHHHiHHHHHHiHHHHHhhhhOGGGGGO..',
-  '.OGGgggOShhhhHHHHiHHHHHHiHHHHHHhhhhSOGGGGGO.',
-  '.OGGGggOShhhhHHHiHHHHHHiHHHHHHHhhhhSOGGGGGO.',
-  '.OGGGGGOShhhhHHiFHHHHFiHFHHHFiHhhhhSOGGGGGO.',
-  '.OGGGGGOShhhhHhHhHHFHFHHFHhHhHHhhhhSOGGGGGO.',
-  '.OGGGGGOhhhhhiFHFFHFiFHFFHFiFFhhhhhhOGGGGGO.',
-  '.OGGGGGOShhhhLLLLLHFFFHFFLLLLLhhhhhSOGGGGGO.',
-  '.OGGGGOSShhhhhEEEEiFFFFFFEEEEEhhhhhSSOGGGGO.',
-  '.OGGGGGOShhhhhWEEEFFFFFFFEWEEEhhhhhSOGGGGGO.',
-  'OGGGGGGOShhhhhWEEEFFFFFFFEWEEEhhhhhSOGGGGGGO',
-  'OGGGGGGOShhhhhEEeEFFFFFFFEEEeEhhhhhSOGGGGGGO',
-  'OGGGGGGOSShhhhEeEEFFFFFFFEEeEEhhhhSSOGGGGGGO',
-  'OGGGGGGOSShhhhFFFFFFFFfFFFFFFFhhhhSSOGGGGGGO',
-  'OGGGGGGOSSShhFBBFFFFFFFFFFFFBBFhhSSSOGGGGGGO',
-  'OGGGGGGGOSShhHfFFFFFFFFFFFFFFfHhhSSOGGGGGGGO',
-  'OGGGGGGGOSShhHfFFFFFMMMMFFFFFfHhhSSOGGGGGGGO',
-  'OGGGGGGGGOShhHHFFFFFFFFFFFFFFHHhhSOGGGGGGGGO',
-  'OGGGGGGGGOShhSHffffffffffffffHShhSOGGGGGGGGO',
-  'OGGGGGGGGGOhhSSHHffffffffffHHSShhOGGGGGGGGGO',
-  'OGGGGGGGGGGOSSSSSffffffffffSSSSSOGGGGGGGGGGO',
-  'OGGGGGGGGGGGOSSSSffFFFFFFffSSSSOGGGGGGGGGGGO',
-  'OGGGGGGGGGGGGOSSSffffffffffSSSOGGGGGGGGGGGGO',
-  'OGGGGGGGGGGGGGOSSffffffffffSSOGGGGGGGGGGGGGO',
-  'OGGGGGGJcCCCCCCCCSSSSSSSSSSCCCCCCCCcJGGGGGGO',
-  'OGGGGGJJcCCCCCCccJJJJJJJJJJccCCCCCCcJJGGGGGO',
-  'OGGGGGJcCCCCCCcJJJJJJJJJJJJJJcCCCCCCcJGGGGGO',
-  'OGGGGJJcCCCCCcJJJJJJJJJJJJJJJJcCCCCCcJJGGGGO',
-  'OGGGGJcccccccJJKKKKKKKjKKKKKKJJcccccccJGGGGO',
-  'OGGGJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJGGGO',
-  'OGGJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
-  'OGGJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
-  'OGJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJGO',
-  'jGJJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJJGj',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  '......................',
+  '.......HHHHHHHH.......',
+  '.....HHHHHHHHHHHH.....',
+  '....HHHiHHHHHHHiHH....',
+  '....HHiHHHHHHHHHiH....',
+  '....HHHHHHHHHHHHHH....',
+  '....HHHhHHHhHHHhHH....',
+  '...HHhFFHFFFHFFHFFhH..',
+  '...HhFFFFFFFFFFFFFhH..',
+  '...HhFWEFFFFFFWEFFhH..',
+  '...HhFEeFFFFFFEeFFhH..',
+  '...HhBFFFFFFFFFFBFhH..',
+  '...HhFFFFFMMFFFFFFhH..',
+  '...HhFfffffffffffFhH..',
+  '..hHh.....ffff....hHh.',
+  '..hHh.oooooooooo..hHh.',
+  '..hH.ooooccccoooo.HHh.',
+  '..hH.oooooocooooo.HHh.',
+  '..hH.ooooooocoooo.HHh.',
+  '..hH.oooooooooooo.HHh.',
+  '..hH.oooooooooooo.HHh.',
+  '..hHFFoooooooooooFFHh.',
+  '..hHH.ssssssssss.HHHh.',
+  '..hHH..pp...pp...HHh..',
+  '.hHH...pp...pp....HHh.',
+  '.hH....pp...pp.....Hh.',
+  '..h...bbbb.bbbb.....h.',
+  '......................',
 ]
 const PORTRAIT_B = [
-  '............................................',
-  '................OOOOOOOOOOOO................',
-  '.............OOOgggGGGGGGGGGOOO.............',
-  '...........OOgggggggGGGGGGGGGGGOO...........',
-  '..........OgggggggggGGGGGGGGGGGGGO..........',
-  '.........OggggggggggGGGGGGGGGGGGggg.........',
-  '........OgggggggggggGGGGGGGGGGGGGOOO........',
-  '.......OgggggggggOOOOOOOOOOGGGGGGGGOO.......',
-  '......OggggggggOOiHHHHiHHHHOOGGGGGGGOO......',
-  '.....OggggggggOHiHHHHiHHHHiHHOGGGGGGOGO.....',
-  '....OggggggggOHiHHHHiHHHHiHHHHOGGGGGOGGO....',
-  '....OgggggggOHiHHHHiHHHHiHHHHiHOGGGOGGGO....',
-  '...OgggggggOHHHHHHHHHHHHHHHHHHHHOGGGGGGGO...',
-  '...OggggggOHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO...',
-  '..OGgggggOSHHHHHHHHHHHHHHHHHHHHHHSOGGGGGGO..',
-  '..OGgggggOHHHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO..',
-  '..OGggggOSHHHHHHHHHiHHHHHHHHHHHHHHSOGGGGGO..',
-  '..OGggggOhhhhHHHHHiHHHHHHiHHHHHhhhhOGGGGGO..',
-  '.OGGgggOShhhhHHHHiHHHHHHiHHHHHHhhhhSOGGGGGO.',
-  '.OGGGggOShhhhHHHiHHHHHHiHHHHHHHhhhhSOGGGGGO.',
-  '.OGGGGGOShhhhHHiFHHHHFiHFHHHFiHhhhhSOGGGGGO.',
-  '.OGGGGGOShhhhHhHhHHFHFHHFHhHhHHhhhhSOGGGGGO.',
-  '.OGGGGGOhhhhhiFHFFHFiFHFFHFiFFhhhhhhOGGGGGO.',
-  '.OGGGGGOShhhhFFFFFHFFFHFFFFFFFhhhhhSOGGGGGO.',
-  '.OGGGGOSShhhhhFFFFiFFFFFFFFFFFhhhhhSSOGGGGO.',
-  '.OGGGGGOShhhhhFFFFFFFFFFFFFFFFhhhhhSOGGGGGO.',
-  'OGGGGGGOShhhhLLLLLFFFFFFFLLLLLhhhhhSOGGGGGGO',
-  'OGGGGGGOShhhhhFFFFFFFFFFFFFFFFhhhhhSOGGGGGGO',
-  'OGGGGGGOSShhhhFFFFFFFFFFFFFFFFhhhhSSOGGGGGGO',
-  'OGGGGGGOSShhhhFFFFFFFFfFFFFFFFhhhhSSOGGGGGGO',
-  'OGGGGGGOSSShhFBBFFFFFFFFFFFFBBFhhSSSOGGGGGGO',
-  'OGGGGGGGOSShhHfFFFFFFFFFFFFFFfHhhSSOGGGGGGGO',
-  'OGGGGGGGOSShhHfFFFFFMMMMFFFFFfHhhSSOGGGGGGGO',
-  'OGGGGGGGGOShhHHFFFFFFFFFFFFFFHHhhSOGGGGGGGGO',
-  'OGGGGGGGGOShhSHffffffffffffffHShhSOGGGGGGGGO',
-  'OGGGGGGGGGOhhSSHHffffffffffHHSShhOGGGGGGGGGO',
-  'OGGGGGGGGGGOSSSSSffffffffffSSSSSOGGGGGGGGGGO',
-  'OGGGGGGGGGGGOSSSSffFFFFFFffSSSSOGGGGGGGGGGGO',
-  'OGGGGGGGGGGGGOSSSffffffffffSSSOGGGGGGGGGGGGO',
-  'OGGGGGGGGGGGGGOSSffffffffffSSOGGGGGGGGGGGGGO',
-  'OGGGGGGJcCCCCCCCCSSSSSSSSSSCCCCCCCCcJGGGGGGO',
-  'OGGGGGJJcCCCCCCccJJJJJJJJJJccCCCCCCcJJGGGGGO',
-  'OGGGGGJcCCCCCCcJJJJJJJJJJJJJJcCCCCCCcJGGGGGO',
-  'OGGGGJJcCCCCCcJJJJJJJJJJJJJJJJcCCCCCcJJGGGGO',
-  'OGGGGJcccccccJJKKKKKKKjKKKKKKJJcccccccJGGGGO',
-  'OGGGJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJGGGO',
-  'OGGJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
-  'OGGJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
-  'OGJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJGO',
-  'jGJJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJJGj',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  '.......HHHHHHHH.......',
+  '.....HHHHHHHHHHHH.....',
+  '....HHHiHHHHHHHiHH....',
+  '....HHiHHHHHHHHHiH....',
+  '....HHHHHHHHHHHHHH....',
+  '....HHHhHHHhHHHhHH....',
+  '...HHhFFHFFFHFFHFFhH..',
+  '...HhFFFFFFFFFFFFFhH..',
+  '...HhFWEFFFFFFWEFFhH..',
+  '...HhFEeFFFFFFEeFFhH..',
+  '...HhBFFFFFFFFFFBFhH..',
+  '...HhFFFFFMMFFFFFFhH..',
+  '...HhFfffffffffffFhH..',
+  '..hHh.....ffff....hHh.',
+  '..hHh.oooooooooo..hHh.',
+  '..hH.ooooccccoooo.HHh.',
+  '..hH.oooooocooooo.HHh.',
+  '..hH.ooooooocoooo.HHh.',
+  '..hH.oooooooooooo.HHh.',
+  '..hH.oooooooooooo.HHh.',
+  '..hHFFoooooooooooFFHh.',
+  '..hHH.ssssssssss.HHHh.',
+  '.hHH...pp...pp....HHh.',
+  'hHH....pp...pp.....HHh',
+  'hH.....pp...pp......Hh',
+  '.h....bbbb.bbbb......h',
+  '......................',
+  '......................',
+]
+const PORTRAIT_C = [
+  '......................',
+  '.......HHHHHHHH.......',
+  '.....HHHHHHHHHHHH.....',
+  '....HHHiHHHHHHHiHH....',
+  '....HHiHHHHHHHHHiH....',
+  '....HHHHHHHHHHHHHH....',
+  '....HHHhHHHhHHHhHH....',
+  '...HHhFFHFFFHFFHFFhH..',
+  '...HhFFFFFFFFFFFFFhH..',
+  '...HhFFFFFFFFFFFFFhH..',
+  '...HhFLLFFFFFFLLFFhH..',
+  '...HhBFFFFFFFFFFBFhH..',
+  '...HhFFFFFMMFFFFFFhH..',
+  '...HhFfffffffffffFhH..',
+  '..hHh.....ffff....hHh.',
+  '..hHh.oooooooooo..hHh.',
+  '..hH.ooooccccoooo.HHh.',
+  '..hH.oooooocooooo.HHh.',
+  '..hH.ooooooocoooo.HHh.',
+  '..hH.oooooooooooo.HHh.',
+  '..hH.oooooooooooo.HHh.',
+  '..hHFFoooooooooooFFHh.',
+  '..hHH.ssssssssss.HHHh.',
+  '..hHH..pp...pp...HHh..',
+  '.hHH...pp...pp....HHh.',
+  '.hH....pp...pp.....Hh.',
+  '..h...bbbb.bbbb.....h.',
+  '......................',
 ]
 const PORTRAIT_PAL: Palette = {
-  O: 0x2e282c, G: 0x6b6066, g: 0x8a7e85, S: 0x3a3238,
   H: 0xe8853a, h: 0xb55a22, i: 0xf7b067,
-  F: 0xf5d6b8, f: 0xdcab8c, B: 0xf0a08a, M: 0xb06060, L: 0x5a3220,
+  F: 0xf5d6b8, f: 0xdcab8c, B: 0xf0a08a, M: 0xb06060, L: 0x8a4a2a,
   E: 0x7a3d12, e: 0xd98a3a, W: 0xffffff,
-  C: 0xe9e4de, c: 0xb5aea8, J: 0x56494f, j: 0x3b3237, K: 0x6e6068,
+  o: 0xd97757, s: 0xa8553a, c: 0xf4ece2, p: 0x3c4a7a, b: 0x2b2b30,
 }
-export const PORTRAIT_W = 44
-export const PORTRAIT_H = 56
+const PP = 2
+export const PORTRAIT_W = 22 * PP
+export const PORTRAIT_H = 28 * PP
 
 const BOT_PAL: Palette = { h: 0x5a3b2e, f: 0xf6d2b3, n: 0xdcb18f, E: 0x3fb8f0, e: 0xffffff, V: 0xb0555b, o: 0xd97757, s: 0xa8553a, c: 0xf4ece2, w: 0xf6d2b3, p: 0x3c4a7a, b: 0x2b2b30, T: 0xffd54a }
 // One block color per task, cycling: [face, light, dark].
@@ -572,18 +546,20 @@ function portraitRects(rows: string[], dx: number, only?: (x: number, y: number)
       }
       let w = 1
       while (x + w < row.length && row[x + w] === ch && (!only || only(x + w, y))) w++
-      out += `<rect x="${x + dx}" y="${y}" width="${w}" height="1" fill="${hex(c)}"/>`
+      out += `<rect x="${(x + dx) * PP}" y="${y * PP}" width="${w * PP}" height="${PP}" fill="${hex(c)}"/>`
       x += w
     }
   })
   return out
 }
 function botBody(dx: number): string {
-  // Frame A whole; the blink only redraws the cells that differ.
-  const differs = (x: number, y: number) => PORTRAIT_B[y]?.[x] !== PORTRAIT_A[y]?.[x]
+  // A and B alternate (a bob with the hair swaying); the blink only redraws
+  // the cells that differ from A, over the top, for a moment every few seconds.
+  const blink = (x: number, y: number) => PORTRAIT_C[y]?.[x] !== PORTRAIT_A[y]?.[x]
   return (
-    `<g>${portraitRects(PORTRAIT_A, dx)}</g>` +
-    `<g>${portraitRects(PORTRAIT_B, dx, differs)}<animate attributeName="opacity" values="0;1;0" keyTimes="0;0.94;0.99" dur="4.5s" calcMode="discrete" repeatCount="indefinite"/></g>`
+    `<g>${portraitRects(PORTRAIT_A, dx)}<animate attributeName="opacity" values="1;0" dur="1s" calcMode="discrete" repeatCount="indefinite"/></g>` +
+    `<g>${portraitRects(PORTRAIT_B, dx)}<animate attributeName="opacity" values="0;1" dur="1s" calcMode="discrete" repeatCount="indefinite"/></g>` +
+    `<g>${portraitRects(PORTRAIT_C, dx, blink)}<animate attributeName="opacity" values="0;1;0" keyTimes="0;0.95;0.99" dur="3.7s" calcMode="discrete" repeatCount="indefinite"/></g>`
   )
 }
 
@@ -596,7 +572,7 @@ function blockBody(s: Save, f: Fx, now: number, dx: number): string {
     : ''
   const tx = (BLOCK_X + 5 - dx) * PX
   const float = (text: string, fill: string, dur: string) =>
-    `<text x="${tx}" y="${3 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="${fill}" stroke="#000" stroke-width="2" paint-order="stroke">${text}<animate attributeName="y" from="${3 * PX}" to="${-2 * PX}" dur="${dur}" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="${dur}" begin="0s" fill="freeze"/></text>`
+    `<text x="${tx}" y="${9 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="${fill}" stroke="#000" stroke-width="2" paint-order="stroke">${text}<animate attributeName="y" from="${9 * PX}" to="${5 * PX}" dur="${dur}" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="${dur}" begin="0s" fill="freeze"/></text>`
   const pop = hitting
     ? float(`-${fmt(f.dmg)}${f.isCrit ? '!' : ''}`, f.isCrit ? '#ffe66d' : '#ffffff', '0.9s')
     : justCleared ? float(`+${fmt(f.reward)}`, '#8fe08f', '1.4s') : ''
