@@ -284,58 +284,70 @@ export function scenePixels(s: Save, f: Fx, now: number, frame: 0 | 1): Pixels {
   if (hitting) {
     const sp = { S: SPARK }
     plot(pixels, ['S.', '.S', 'S.'], BLOCK_X - 3, 3, sp)
-    if (f.isCrit) plot(pixels, ['.S', 'S.', '.S'], BLOCK_X - 5, 2, sp)
+    if (f.isCrit) plot(pixels, ['.S', 'S.', '.S'], BLOCK_X - 5, 6, sp)
   }
   return pixels
 }
 
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 
-export function sceneSvg(s: Save, f: Fx, now: number): string {
-  const w = SCENE_W * PX
-  const h = SCENE_H * PX
+// The desktop scene is two SVGs side by side: the bot, whose source never
+// changes (so its animation never restarts), and the block, redrawn on hits.
+export const SPLIT_X = 11
+const BOT_W = SPLIT_X * PX
+const BLOCK_W = (SCENE_W - SPLIT_X) * PX
+const SCENE_PX_H = SCENE_H * PX
+
+function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
+  let out = ''
+  for (let y = 0; y < SCENE_H; y++)
+    for (let x = x0; x < x1; x++) {
+      const c = pix[y * SCENE_W + x]
+      if (c !== undefined) out += `<rect x="${(x - dx) * PX}" y="${y * PX}" width="${PX}" height="${PX}" fill="${hex(c)}"/>`
+    }
+  return out
+}
+
+const svgOpen = (w: number) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible">`
+
+function botBody(dx: number): string {
+  const f: Fx = { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }
+  const a = scenePixels(FRESH, f, 0, 0)
+  const b = scenePixels(FRESH, f, 0, 1)
+  return (
+    `<g>${rects(a, 0, SPLIT_X, dx)}<animate attributeName="opacity" values="1;0" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>` +
+    `<g>${rects(b, 0, SPLIT_X, dx)}<animate attributeName="opacity" values="0;1" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>`
+  )
+}
+
+function blockBody(s: Save, f: Fx, now: number, dx: number): string {
   const hitting = now - f.at < 400
   const justCleared = f.cleared && now - f.at < 1500
-  const rects = (pix: Pixels, skipX?: [number, number]) => {
-    let out = ''
-    for (let y = 0; y < SCENE_H; y++)
-      for (let x = 0; x < SCENE_W; x++) {
-        const c = pix[y * SCENE_W + x]
-        if (c === undefined) continue
-        if (skipX && x >= skipX[0] && x < skipX[1]) continue
-        out += `<rect x="${x * PX}" y="${y * PX}" width="${PX}" height="${PX}" fill="${hex(c)}"/>`
-      }
-    return out
-  }
-  const a = scenePixels(s, f, now, 0)
-  const b = scenePixels(s, f, now, 1)
-  const botA = rects(a, [BLOCK_X - 6, SCENE_W])
-  const botB = rects(b, [BLOCK_X - 6, SCENE_W])
-  const block = (() => {
-    let out = ''
-    for (let y = 0; y < SCENE_H; y++)
-      for (let x = BLOCK_X - 6; x < SCENE_W; x++) {
-        const c = a[y * SCENE_W + x]
-        if (c !== undefined) out += `<rect x="${x * PX}" y="${y * PX}" width="${PX}" height="${PX}" fill="${hex(c)}"/>`
-      }
-    return out
-  })()
+  const pix = scenePixels(s, f, now, 0)
   const shake = hitting
     ? `<animateTransform attributeName="transform" type="translate" values="0 0;${f.isCrit ? 3 : 2} 0;-1 0;0 0" dur="0.25s" begin="0s" repeatCount="1"/>`
     : ''
+  const tx = (BLOCK_X + 5 - dx) * PX
+  const float = (text: string, fill: string, dur: string) =>
+    `<text x="${tx}" y="${3 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="${fill}" stroke="#000" stroke-width="2" paint-order="stroke">${text}<animate attributeName="y" from="${3 * PX}" to="${-2 * PX}" dur="${dur}" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="${dur}" begin="0s" fill="freeze"/></text>`
   const pop = hitting
-    ? `<text x="${(BLOCK_X + 5) * PX}" y="${3 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="${f.isCrit ? '#ffe66d' : '#ffffff'}" stroke="#000" stroke-width="2" paint-order="stroke">-${fmt(f.dmg)}${f.isCrit ? '!' : ''}<animate attributeName="y" from="${3 * PX}" to="${-2 * PX}" dur="0.9s" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="0.9s" begin="0s" fill="freeze"/></text>`
-    : justCleared
-      ? `<text x="${(BLOCK_X + 5) * PX}" y="${3 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="#8fe08f" stroke="#000" stroke-width="2" paint-order="stroke">+${fmt(f.reward)}<animate attributeName="y" from="${3 * PX}" to="${-2 * PX}" dur="1.4s" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="1.4s" begin="0s" fill="freeze"/></text>`
-      : ''
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" shape-rendering="crispEdges" overflow="visible">` +
-    `<g>${botA}<animate attributeName="opacity" values="1;0" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>` +
-    `<g>${botB}<animate attributeName="opacity" values="0;1" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>` +
-    `<g>${block}${shake}</g>` +
-    pop +
-    `</svg>`
-  )
+    ? float(`-${fmt(f.dmg)}${f.isCrit ? '!' : ''}`, f.isCrit ? '#ffe66d' : '#ffffff', '0.9s')
+    : justCleared ? float(`+${fmt(f.reward)}`, '#8fe08f', '1.4s') : ''
+  return `<g>${rects(pix, SPLIT_X, SCENE_W, dx)}${shake}</g>${pop}`
+}
+
+let botCache: string | null = null
+export function botSvg(): string {
+  if (!botCache) botCache = svgOpen(BOT_W) + botBody(0) + '</svg>'
+  return botCache
+}
+export function blockSvg(s: Save, f: Fx, now: number): string {
+  return svgOpen(BLOCK_W) + blockBody(s, f, now, SPLIT_X) + '</svg>'
+}
+// The whole scene in one SVG, for docs and tests.
+export function sceneSvg(s: Save, f: Fx, now: number): string {
+  return svgOpen(SCENE_W * PX) + botBody(0) + blockBody(s, f, now, 0) + '</svg>'
 }
 
 // Terminal: the scene as a Raster of half blocks, two pixels per cell.
@@ -621,28 +633,42 @@ export const register: Register = on => {
       e.surface === 'terminal' ? (
         <Raster key="scene" columns={SCENE_W} rows={SCENE_ROWS} cells={sceneCells(s, f, now)} />
       ) : (
-        <Svg source={sceneSvg(s, f, now)} alt={`Claude Idle: ${taskName(s.level)} at ${Math.round(done * 100)}%`} width={SCENE_W * PX} height={SCENE_H * PX} isInteractive />
+        <Box flexDirection="row" flexShrink={0}>
+          <Svg source={botSvg()} alt="a little bot" width={BOT_W} height={SCENE_PX_H} isInteractive />
+          <Svg source={blockSvg(s, f, now)} alt={`${taskName(s.level)} at ${Math.round(done * 100)}%`} width={BLOCK_W} height={SCENE_PX_H} isInteractive />
+        </Box>
       )
     const justCleared = f.cleared && now - f.at < 1500
+    const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
+    const sep = <Text dimColor>{'  │  '}</Text>
 
     return (
-      <Box flexDirection="row" alignItems="center" columnGap={2} paddingX={1}>
-        {art}
-        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-          <Text wrap="truncate-end">
-            <Text bold>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
-            <Text dimColor>{`  #${s.level + 1}  `}</Text>
-            <Text color={done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : undefined}>{bar(done, narrow ? 8 : 14)}</Text>
-            <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
-          </Text>
-          <Text wrap="truncate-end">
-            <Text color="yellow">✦ {fmt(s.tokens)}</Text>
-            <Text dimColor>{`  +${fmt(dps(s))}/s  ⚡ ${fmt(power(s))}/hit`}</Text>
-            {!narrow && <Text dimColor>{`  ${modelAt(s.model).label} · ${infraAt(s.infra).label}`}</Text>}
-          </Text>
+      <Box flexDirection="column" paddingX={1} rowGap={0}>
+        <Box flexDirection="row" alignItems="center" columnGap={2}>
+          {art}
+          <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+            <Text wrap="truncate-end">
+              <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared} cleared` : taskName(s.level)}</Text>
+              <Text dimColor>{`   task ${s.level + 1}`}</Text>
+            </Text>
+            <Text wrap="truncate-end">
+              <Text color={barColor}>{bar(done, narrow ? 12 : 24)}</Text>
+              <Text>{` ${Math.round(done * 100)}%`}</Text>
+              {!narrow && <Text dimColor>{`   ${fmt(s.hp)} / ${fmt(max)} HP`}</Text>}
+            </Text>
+            <Text wrap="truncate-end">
+              <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
+              {sep}
+              <Text color="green">{`▲ ${fmt(dps(s))}/s`}</Text>
+              {sep}
+              <Text>{`⚡ ${fmt(power(s))}/hit`}</Text>
+              {!narrow && sep}
+              {!narrow && <Text dimColor>{`${modelAt(s.model).label} · ${infraAt(s.infra).label}`}</Text>}
+            </Text>
+          </Box>
         </Box>
-        <Box flexDirection="row" columnGap={1} flexShrink={0}>
-          <Button key="prompt" label="Prompt ⚡" hotkey="p" onPress={ignorePress} />
+        <Box flexDirection="row" columnGap={1} paddingTop={0}>
+          <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
           <Button key="shop" label="Shop" onPress={ignorePress} />
           <Button key="hide" label="Hide" onPress={ignorePress} />
         </Box>
