@@ -62,35 +62,35 @@ export const TASKS = [
 
 export type Gen = { id: GenId; label: string; dps: number; cost: number; hotkey: string }
 export const GENS: Gen[] = [
-  { id: 'agent', label: 'Agent', dps: 0.5, cost: 15, hotkey: '1' },
-  { id: 'subagent', label: 'Subagent', dps: 4, cost: 120, hotkey: '2' },
-  { id: 'robot', label: 'Robot', dps: 25, cost: 1300, hotkey: '3' },
-  { id: 'swarm', label: 'Agent swarm', dps: 150, cost: 14000, hotkey: '4' },
+  { id: 'agent', label: 'Agent', dps: 0.4, cost: 20, hotkey: '1' },
+  { id: 'subagent', label: 'Subagent', dps: 4, cost: 250, hotkey: '2' },
+  { id: 'robot', label: 'Robot', dps: 30, cost: 3500, hotkey: '3' },
+  { id: 'swarm', label: 'Agent swarm', dps: 250, cost: 50000, hotkey: '4' },
 ]
 
 export type Tier = { label: string; mult: number; cost: number }
 export const MODELS: Tier[] = [
   { label: 'Haiku', mult: 1, cost: 0 },
-  { label: 'Sonnet', mult: 3, cost: 50 },
-  { label: 'Opus', mult: 10, cost: 500 },
-  { label: 'Fable', mult: 30, cost: 5000 },
-  { label: 'Mythos', mult: 100, cost: 60000 },
+  { label: 'Sonnet', mult: 3, cost: 100 },
+  { label: 'Opus', mult: 10, cost: 2000 },
+  { label: 'Fable', mult: 30, cost: 40000 },
+  { label: 'Mythos', mult: 100, cost: 800000 },
 ]
 export const INFRA: Tier[] = [
   { label: 'Laptop', mult: 1, cost: 0 },
-  { label: 'GPU', mult: 2, cost: 300 },
-  { label: 'Rack', mult: 4, cost: 3000 },
-  { label: 'Data center', mult: 8, cost: 30000 },
-  { label: 'Cluster', mult: 16, cost: 300000 },
+  { label: 'GPU', mult: 2, cost: 600 },
+  { label: 'Rack', mult: 4, cost: 10000 },
+  { label: 'Data center', mult: 8, cost: 150000 },
+  { label: 'Cluster', mult: 16, cost: 2500000 },
 ]
 
 export type Tool = { id: ToolId; label: string; cost: number; desc: string; hotkey: string }
 export const TOOLS: Tool[] = [
-  { id: 'read', label: 'Read', cost: 100, desc: 'agents +25%', hotkey: 'r' },
-  { id: 'edit', label: 'Edit', cost: 400, desc: 'prompts +50%', hotkey: 'e' },
-  { id: 'bash', label: 'Bash', cost: 1500, desc: '20% double hit', hotkey: 'b' },
-  { id: 'grep', label: 'Grep', cost: 5000, desc: 'crit 5% → 15%', hotkey: 'g' },
-  { id: 'web', label: 'WebSearch', cost: 20000, desc: 'offline 2× longer', hotkey: 'w' },
+  { id: 'read', label: 'Read', cost: 200, desc: 'agents +25%', hotkey: 'r' },
+  { id: 'edit', label: 'Edit', cost: 900, desc: 'prompts +50%', hotkey: 'e' },
+  { id: 'bash', label: 'Bash', cost: 5000, desc: '20% double hit', hotkey: 'b' },
+  { id: 'grep', label: 'Grep', cost: 20000, desc: 'crit 5% → 15%', hotkey: 'g' },
+  { id: 'web', label: 'WebSearch', cost: 80000, desc: 'offline 2× longer', hotkey: 'w' },
 ]
 
 export function modelAt(i: number): Tier {
@@ -101,7 +101,10 @@ export function infraAt(i: number): Tier {
 }
 
 export const CRIT_MULT = 10
-export const POINT_EVERY = 50000
+export const POINT_EVERY = 250000
+// Owning this many of one agent doubles that agent, each time.
+export const MILESTONES = [10, 25, 50, 100, 200, 400]
+export const SPRINT = 10
 export const OFFLINE_RATE = 0.5
 export const OFFLINE_CAP_H = 4
 
@@ -111,10 +114,10 @@ export function taskName(level: number): string {
   return (TASKS[level % n] ?? '') + (round > 0 ? ` v${round + 1}` : '')
 }
 export function taskHp(level: number): number {
-  return Math.floor(10 * Math.pow(1.28, level))
+  return Math.floor(10 * Math.pow(1.33, level))
 }
 export function taskReward(level: number): number {
-  return Math.floor(5 + taskHp(level) * 0.55)
+  return Math.floor(4 + taskHp(level) * 0.45)
 }
 export function prestigeMult(points: number): number {
   return 1 + 0.5 * points
@@ -128,12 +131,25 @@ export function power(s: Save): number {
 export function critChance(s: Save): number {
   return s.tools.grep ? 0.15 : 0.05
 }
+export function milestoneMult(owned: number): number {
+  return Math.pow(2, MILESTONES.filter(n => owned >= n).length)
+}
+export function nextMilestone(owned: number): number | null {
+  return MILESTONES.find(n => owned < n) ?? null
+}
+export function genDps(s: Save, g: Gen): number {
+  const n = s.owned[g.id] ?? 0
+  return g.dps * milestoneMult(n) * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
+}
+export function sprintOf(level: number): number {
+  return Math.floor(level / SPRINT) + 1
+}
 export function dps(s: Save): number {
-  const raw = GENS.reduce((sum, g) => sum + g.dps * (s.owned[g.id] ?? 0), 0)
+  const raw = GENS.reduce((sum, g) => sum + g.dps * milestoneMult(s.owned[g.id] ?? 0) * (s.owned[g.id] ?? 0), 0)
   return raw * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
 }
 export function genCost(g: Gen, owned: number): number {
-  return Math.ceil(g.cost * Math.pow(1.15, owned))
+  return Math.ceil(g.cost * Math.pow(1.17, owned))
 }
 export function offlineCapMs(s: Save): number {
   return OFFLINE_CAP_H * (s.tools.web ? 2 : 1) * 3600_000
@@ -189,84 +205,138 @@ export function nextTier(list: Tier[], at: number): Tier | null {
 // as its HP drops and changes color with each task.
 
 const BOT_A = [
-  '...k....',
-  '.hhhhhh.',
-  '.hEhhEh.',
-  '.hhhhhh.',
-  '..bbbb..',
-  'wbbbbbbw',
-  '..bbbb..',
-  '..l..l..',
-  '..l..l..',
+  '.......kk.......',
+  '.......kk.......',
+  '....hhhhhhhh....',
+  '...hhhhhhhhhh...',
+  '...hVVVVVVVVh...',
+  '...hVEEVVEEVh...',
+  '...hVVVVVVVVh...',
+  '...hhhhhhhhhh...',
+  '....dddddddd....',
+  '......bbbb......',
+  '...wwbbbbbbww...',
+  '..w.bbbccbbb.w..',
+  '..w.bbbccbbb.w..',
+  '....bbbbbbbb....',
+  '....ssssssss....',
+  '.....ll..ll.....',
+  '.....ll..ll.....',
+  '....lll..lll....',
 ]
 const BOT_B = [
-  '...k....',
-  '.hhhhhh.',
-  '.hEhhEh.',
-  '.hhhhhhw',
-  '..bbbbw.',
-  'wbbbbb..',
-  '..bbbb..',
-  '..l..l..',
-  '..l..l..',
+  '.......kk.....tt',
+  '.......kk.....tt',
+  '....hhhhhhhh..t.',
+  '...hhhhhhhhhh.t.',
+  '...hVVVVVVVVh.w.',
+  '...hVEEVVEEVhww.',
+  '...hVVVVVVVVhw..',
+  '...hhhhhhhhhhw..',
+  '....ddddddddw...',
+  '......bbbb.w....',
+  '...wwbbbbbbw....',
+  '..w.bbbccbbb....',
+  '..w.bbbccbbb....',
+  '....bbbbbbbb....',
+  '....ssssssss....',
+  '.....ll..ll.....',
+  '.....ll..ll.....',
+  '....lll..lll....',
 ]
 // Four shapes, one per task in turn: an ore rock, a crystal, a chip, a bug.
 // F face, L lit edge, D dark edge, H highlight, X texture.
 const SHAPES: string[][] = [
   [
-    '....LLLL....',
-    '..LLFFFFL...',
-    '.LFHFFFXFD..',
-    'LFFFFFXFFFD.',
-    'LFXFFFFFFDD.',
-    'LFFFFXFFDDD.',
-    '.DFFFFFDXDD.',
-    '..DDXDDDDD..',
-    '....DDDD....',
+    '........LLLLLLLL........',
+    '.....LLLFFFFFFFFLL......',
+    '...LLFFHHFFFFFFFFFLL....',
+    '..LFFHHFFFFXXFFFFFFFD...',
+    '.LFFHFFFFFFFFFFFFFFFFD..',
+    '.LFFFFFFXXFFFFFFFXXFFD..',
+    'LFFFFFFFXXFFFFFFFFFFFFD.',
+    'LFFXXFFFFFFFFFFFFFFFFDD.',
+    'LFFXXFFFFFFFXXFFFFFFDDD.',
+    'LFFFFFFFFFFFXXFFFFFDDDD.',
+    'LFFFFFFXXFFFFFFFFFDDDDD.',
+    '.DFFFFFXXFFFFFFXXFDDDDD.',
+    '.DFFFFFFFFFFFFFXXDDDDDD.',
+    '..DFFFFFFFXXFFFFDDDDDD..',
+    '...DDFFFFFXXFFDDDDDDD...',
+    '....DDDFFFFFDDDDDDD.....',
+    '......DDDDDDDDDDD.......',
+    '........DDDDDDD.........',
   ],
   [
-    '....LLLL....',
-    '...LHHFFL...',
-    '..LHFFFFFD..',
-    '.LHFFFXFFFD.',
-    'LFFFFFFFFFFD',
-    '.DFFXFFFFFD.',
-    '..DFFFFXFD..',
-    '...DFFFFD...',
-    '....DDDD....',
+    '..........LLLL..........',
+    '.........LHHHHL.........',
+    '........LHHHFFFL........',
+    '.......LHHFFFFFFL.......',
+    '......LHHFFFFFFFFL......',
+    '.....LHFFFFFXFFFFFD.....',
+    '....LHFFFFFFXXFFFFFD....',
+    '...LHFFFFFFFFFFFFFFFD...',
+    '..LFFFFFXXFFFFFFFFFFFD..',
+    '.LFFFFFFXXFFFFFFFXFFFFD.',
+    'LFFFFFFFFFFFFFFFFXXFFFFD',
+    '.DFFFFFFFFFFXXFFFFFFFFD.',
+    '..DFFFFFFFFFXXFFFFFFFD..',
+    '...DFFFFFFFFFFFFFFFFD...',
+    '....DFFFFFXXFFFFFFFD....',
+    '.....DFFFFXXFFFFFFD.....',
+    '......DDFFFFFFFFDD......',
+    '........DDDDDDDD........',
   ],
   [
-    '.D.D.D.D.D..',
-    'LLLLLLLLLLL.',
-    'LFFFFFFFFFD.',
-    'LFXFFXFFXFD.',
-    'LFFFFFFFFFD.',
-    'LFXFFXFFXFD.',
-    'LFFFFFFFFFD.',
-    'DDDDDDDDDDD.',
-    '.D.D.D.D.D..',
+    '..D..D..D..D..D..D..D...',
+    '..D..D..D..D..D..D..D...',
+    'LLLLLLLLLLLLLLLLLLLLLL..',
+    'LFFFFFFFFFFFFFFFFFFFFD..',
+    'LFFXXFFFFXXFFFFXXFFFFD..',
+    'LFFXXFFFFXXFFFFXXFFFFD..',
+    'LFFFFFFFFFFFFFFFFFFFFD..',
+    'LFFFFFHHHHHHHHHHFFFFFD..',
+    'LFFXXFHFFFFFFFFHFXXFFD..',
+    'LFFXXFHFFFFFFFFHFXXFFD..',
+    'LFFFFFHHHHHHHHHHFFFFFD..',
+    'LFFFFFFFFFFFFFFFFFFFFD..',
+    'LFFXXFFFFXXFFFFXXFFFFD..',
+    'LFFXXFFFFXXFFFFXXFFFFD..',
+    'LFFFFFFFFFFFFFFFFFFFFD..',
+    'DDDDDDDDDDDDDDDDDDDDDD..',
+    '..D..D..D..D..D..D..D...',
+    '..D..D..D..D..D..D..D...',
   ],
   [
-    '..L......L..',
-    '...D....D...',
-    '..LLFFFFLL..',
-    '.LFFHFFFFFD.',
-    'LFFFFXFFFFFD',
-    'LFFFXFXFFFFD',
-    '.LFFFXFFFFD.',
-    '..DFFFFFFD..',
-    '...DDDDDD...',
+    '....L..............L....',
+    '.....L............L.....',
+    '......D..........D......',
+    '.......LLLLLLLLLL.......',
+    '......LLHHFFFFFFLL......',
+    '.....LFHHFFFFFFFFFD.....',
+    '....LFFFFFFXXFFFFFFD....',
+    '...LFFFFFFFXXFFFFFFFD...',
+    '..LFFFFFXXFFFFXXFFFFFD..',
+    '..LFFFFFXXFFFFXXFFFFFD..',
+    '.LFFFFFFFFFXXFFFFFFFFFD.',
+    '.LFFFFFFFFFXXFFFFFFFFFD.',
+    '..DFFFFFXXFFFFXXFFFFFD..',
+    '..DFFFFFXXFFFFXXFFFFD...',
+    '...DFFFFFFFFFFFFFFFD....',
+    '....DDFFFFFFFFFFFDD.....',
+    '......DDDDDDDDDDD.......',
+    '...D....D....D....D.....',
   ],
 ]
 // Crack pixels [x, y] added at each stage of damage.
 const CRACKS: [number, number][][] = [
-  [[4, 1], [4, 2], [5, 3]],
-  [[5, 4], [6, 5], [3, 4], [2, 5]],
-  [[6, 6], [7, 7], [1, 2], [2, 3], [7, 2]],
-  [[8, 1], [3, 6], [4, 7], [1, 6], [6, 2], [8, 5], [9, 3], [10, 4]],
+  [[11, 2], [11, 3], [12, 4], [12, 5], [13, 6]],
+  [[13, 7], [14, 8], [13, 9], [8, 5], [7, 6], [6, 7]],
+  [[14, 10], [15, 11], [16, 12], [5, 8], [4, 9], [9, 10], [10, 11], [10, 12], [19, 5], [19, 6]],
+  [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
 ]
 export type Palette = Record<string, number>
-const BOT_PAL: Palette = { k: 0xd97757, h: 0xc9c4bb, E: 0x3fb8f0, b: 0xd97757, w: 0x8a8580, l: 0x6f6a64 }
+const BOT_PAL: Palette = { k: 0xd97757, h: 0xd6d1c7, d: 0x9c978e, V: 0x2f3a4a, E: 0x5fd3ff, b: 0xd97757, s: 0xa8553a, c: 0x7ff0ff, w: 0x8a8580, l: 0x6f6a64, t: 0xffd54a }
 // One block color per task, cycling: [face, light, dark].
 const BLOCK_COLORS: [number, number, number][] = [
   [0xd97757, 0xf0a284, 0x9a4d33], // Claude orange
@@ -300,11 +370,11 @@ function blockPal(level: number): Palette {
   return { F, L, D, C: CRACK, H: mix(L, 0xffffff, 0.45), X: mix(F, D, 0.55) }
 }
 
-export const SCENE_W = 28
-export const SCENE_H = 10
-const BOT_X = 2
-const BLOCK_X = 15
-const PX = 4
+export const SCENE_W = 56
+export const SCENE_H = 20
+const BOT_X = 3
+const BLOCK_X = 30
+const PX = 2
 
 type Pixels = (number | undefined)[]
 function plot(pixels: Pixels, rows: string[], x0: number, y0: number, pal: Palette) {
@@ -326,8 +396,8 @@ export function scenePixels(s: Save, f: Fx, now: number, frame: 0 | 1): Pixels {
   plot(pixels, blockRows(s.level, crackStage(s.hp, taskHp(s.level))), BLOCK_X, 1, blockPal(s.level))
   if (hitting) {
     const sp = { S: SPARK }
-    plot(pixels, ['S.', '.S', 'S.'], BLOCK_X - 3, 3, sp)
-    if (f.isCrit) plot(pixels, ['.S', 'S.', '.S'], BLOCK_X - 4, 6, sp)
+    plot(pixels, ['SS..', '.SS.', '..SS', '.SS.', 'SS..'], BLOCK_X - 6, 5, sp)
+    if (f.isCrit) plot(pixels, ['..SS', '.SS.', 'SS..', '.SS.', '..SS'], BLOCK_X - 8, 11, sp)
   }
   return pixels
 }
@@ -342,7 +412,7 @@ const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 
 // The desktop scene is two SVGs side by side: the bot, whose source never
 // changes (so its animation never restarts), and the block, redrawn on hits.
-export const SPLIT_X = 11
+export const SPLIT_X = 22
 const BOT_W = SPLIT_X * PX
 const BLOCK_W = (SCENE_W - SPLIT_X) * PX
 const SCENE_PX_H = SCENE_H * PX
@@ -414,15 +484,25 @@ function base64(bytes: Uint8Array): string {
   return out
 }
 
-export const SCENE_ROWS = SCENE_H / 2
+// The terminal gets the scene at half size: each cell holds a 2×2 block of
+// pixels on top and another below, so the band stays five rows tall.
+export const CELL_W = SCENE_W / 2
+export const SCENE_ROWS = SCENE_H / 4
 export function sceneCells(s: Save, f: Fx, now: number): string {
   const pix = scenePixels(s, f, now, (Math.floor(now / 800) % 2) as 0 | 1)
-  const grid = new Uint32Array(SCENE_W * SCENE_ROWS * 3)
+  const at = (x: number, y: number): number | undefined => {
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
+      const c = pix[(y * 2 + dy) * SCENE_W + x * 2 + dx]
+      if (c !== undefined) return c
+    }
+    return undefined
+  }
+  const grid = new Uint32Array(CELL_W * SCENE_ROWS * 3)
   for (let row = 0; row < SCENE_ROWS; row++)
-    for (let x = 0; x < SCENE_W; x++) {
-      const top = pix[row * 2 * SCENE_W + x]
-      const bottom = pix[(row * 2 + 1) * SCENE_W + x]
-      const i = (row * SCENE_W + x) * 3
+    for (let x = 0; x < CELL_W; x++) {
+      const top = at(x, row * 2)
+      const bottom = at(x, row * 2 + 1)
+      const i = (row * CELL_W + x) * 3
       const [ch, fg, bg]: [number, number, number] =
         top === undefined && bottom === undefined ? [0x20, DEFAULT, DEFAULT]
         : top === undefined ? [0x2584, bottom as number, DEFAULT]
@@ -489,6 +569,7 @@ async function hit($: EngineInterface, kind: 'click' | 'tool' | 'turn') {
   }
   await commit($, s)
   await update($, fx, () => ({ at: now, dmg, isCrit, cleared: r.last, reward: r.reward }))
+  if (r.cleared > 0 && s.level % SPRINT === 0) await toast($, `🏁 Sprint ${sprintOf(s.level) - 1} done! Sprint ${sprintOf(s.level)} begins`)
   if (r.cleared > 0 && kind !== 'click') {
     const what = r.cleared === 1 ? `"${r.last}"` : `${r.cleared} tasks`
     await toast($, `🤖 ${kind === 'turn' ? 'Turn crit' : 'Free hit'} cleared ${what} (+${fmt(r.reward)} ✦)`)
@@ -500,7 +581,9 @@ async function buyGen($: EngineInterface, id: GenId) {
   const g = GENS.find(x => x.id === id)!
   const cost = genCost(g, s.owned[id] ?? 0)
   if (s.tokens < cost) return
-  await commit($, { ...s, tokens: s.tokens - cost, owned: { ...s.owned, [id]: (s.owned[id] ?? 0) + 1 } })
+  const n = (s.owned[id] ?? 0) + 1
+  await commit($, { ...s, tokens: s.tokens - cost, owned: { ...s.owned, [id]: n } })
+  if (MILESTONES.includes(n)) await toast($, `🚀 ${n} ${g.label.toLowerCase()}s: they now work ×${milestoneMult(n)}`)
 }
 
 async function buyTier($: EngineInterface, which: 'model' | 'infra') {
@@ -693,7 +776,7 @@ export const register: Register = on => {
 
     const art =
       e.surface === 'terminal' ? (
-        <Raster key="scene" columns={SCENE_W} rows={SCENE_ROWS} cells={sceneCells(s, f, now)} />
+        <Raster key="scene" columns={CELL_W} rows={SCENE_ROWS} cells={sceneCells(s, f, now)} />
       ) : (
         <Box flexDirection="row" flexShrink={0}>
           <Svg source={botSvg()} alt="a little bot" width={BOT_W} height={SCENE_PX_H} isInteractive />
@@ -702,38 +785,44 @@ export const register: Register = on => {
       )
     const justCleared = f.cleared && now - f.at < 1500
     const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
+    // Three stat columns, together as wide as the bar and its percent.
+    const COL = narrow ? 9 : 12
+    const BAR = COL * 3 - 5
+    const col = (icon: string, value: string, label: string, color?: string) => (
+      <Box width={COL} flexShrink={0}>
+        <Text wrap="truncate">
+          <Text color={color} bold={color === 'yellow'}>{`${icon}${value}`}</Text>
+          <Text dimColor>{label}</Text>
+        </Text>
+      </Box>
+    )
 
     return (
-      <Box flexDirection="column" paddingX={1}>
-        <Box flexDirection="row" alignItems="center" columnGap={2}>
+      <Box flexDirection="column" paddingX={1} rowGap={1}>
+        <Box flexDirection="row" alignItems="center" columnGap={3}>
           {art}
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">
               <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
-              <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1}`}</Text>
+              <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1} · sprint ${sprintOf(s.level)}`}</Text>
             </Text>
             <Text wrap="truncate-end">
-              <Text color={barColor}>{bar(done, narrow ? 12 : 24)}</Text>
-              <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
+              <Text color={barColor}>{bar(done, BAR)}</Text>
+              <Text dimColor>{` ${String(Math.round(done * 100)).padStart(3)}%`}</Text>
             </Text>
-            <Text wrap="truncate-end">
-              <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
-              <Text dimColor>{' tokens'}</Text>
-              <Text dimColor>{'    '}</Text>
-              <Text color="green">{`+${fmt(dps(s))}`}</Text>
-              <Text dimColor>{'/sec'}</Text>
-              <Text dimColor>{'    '}</Text>
-              <Text>{`⚡ ${fmt(power(s))}`}</Text>
-              <Text dimColor>{'/prompt'}</Text>
-            </Text>
+            <Box flexDirection="row">
+              {col('✦ ', fmt(s.tokens), ' tokens', 'yellow')}
+              {col('+', fmt(dps(s)), '/sec', 'green')}
+              {col('⚡ ', fmt(power(s)), '/prompt')}
+            </Box>
           </Box>
           <Box flexShrink={0} alignSelf="flex-start">
-            <Button key="hide" label="Hide" onPress={ignorePress} />
+            <Button key="hide" label="hide" plain dimColor onPress={ignorePress} />
           </Box>
         </Box>
         <Box flexDirection="row" justifyContent="space-between">
           <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
-          <Button key="shop" label="Shop" onPress={ignorePress} />
+          <Button key="shop" label="Shop 🛒" onPress={ignorePress} />
         </Box>
       </Box>
     )
@@ -752,7 +841,6 @@ export const register: Register = on => {
     const nextPointAt = POINT_EVERY * (pts + 1) * (pts + 1)
     const columns = e.viewport?.columns ?? 80
     const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
-    const perAgent = infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
 
     const section = (title: string, children: any) => (
       <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
@@ -768,10 +856,12 @@ export const register: Register = on => {
           <Box width={18} flexShrink={0}>
             <Button key={key} label={label} hotkey={hotkey} dimColor={!can} onPress={ignorePress} />
           </Box>
-          <Box width={9} flexShrink={0}>
-            <Text color={can ? 'yellow' : undefined} dimColor={!can}>{`${fmt(cost)} ✦`}</Text>
+          <Box width={16} flexShrink={0}>
+            {can
+              ? <Text color="yellow">{`${fmt(cost)} ✦`}</Text>
+              : <Text dimColor>{`${fmt(cost)} ✦ (need ${fmt(cost - s.tokens)})`}</Text>}
           </Box>
-          <Text dimColor wrap="truncate-end">{detail}</Text>
+          <Text dimColor={!can} wrap="truncate-end">{detail}</Text>
         </Box>
       )
     }
@@ -800,7 +890,7 @@ export const register: Register = on => {
         <Box flexDirection="column">
           <Text wrap="truncate-end">
             <Text bold>{taskName(s.level)}</Text>
-            <Text dimColor>{`   task ${s.level + 1} · pays ${fmt(taskReward(s.level))} ✦`}</Text>
+            <Text dimColor>{`   task ${s.level + 1} · sprint ${sprintOf(s.level)} · pays ${fmt(taskReward(s.level))} ✦`}</Text>
           </Text>
           <Text wrap="truncate-end">
             <Text color={barColor}>{bar(done, Math.max(10, Math.min(40, columns - 20)))}</Text>
@@ -814,13 +904,15 @@ export const register: Register = on => {
           </Box>
           <Box flexDirection="row" columnGap={1} paddingTop={1}>
             <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
-            <Text dimColor>p / 1-4 / m i / r e b g w / t</Text>
+            <Text dimColor>keys while the pane is focused: p prompt · 1-4 agents · m model · i infra · r e b g w tools · t train</Text>
           </Box>
         </Box>
 
         {section('Agents', GENS.map(g => {
           const n = s.owned[g.id] ?? 0
-          return row(`buy-${g.id}`, n ? `${g.label} ×${n}` : g.label, g.hotkey, genCost(g, n), `+${fmt(g.dps * perAgent)}/sec each`)
+          const nm = nextMilestone(n)
+          const each = `+${fmt(genDps(s, g))}/sec each`
+          return row(`buy-${g.id}`, n ? `${g.label} ×${n}` : g.label, g.hotkey, genCost(g, n), nm ? `${each} · ×2 at ${nm}` : each)
         }))}
 
         {section('Upgrades', [

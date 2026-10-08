@@ -8,7 +8,8 @@ A Claude-themed idle game that lives above your [Claude Code](https://claude.com
 
 - **The block is a task:** "Fix the flaky test", "Refactor auth", "Ship v2", "Achieve AGI"… Each has HP and takes a shape in turn: an ore rock, a crystal, a chip, a bug. It cracks as it takes damage and changes color with every task.
 - **Prompt ⚡** hits it for your prompt power. 5% of hits are crits for ×10. Clear a task and it pays tokens ✦; the next one has more HP and pays more.
-- **Agents hit it for you**, every second, even while you type: Agents → Subagents → Robots → Agent swarms. Each one you buy costs a little more.
+- **Agents hit it for you**, every second, even while you type: Agents → Subagents → Robots → Agent swarms. Each one you buy costs 17% more, and owning 10, 25, 50, 100, 200 or 400 of a kind doubles that kind, every time.
+- **Sprints:** every ten tasks is a sprint. Task HP grows 33% per task, so each sprint needs the next tier of agents and upgrades to keep pace.
 - **Upgrades:**
   - **Models** multiply your prompt power: Haiku ×1 → Sonnet ×3 → Opus ×10 → Fable ×30 → Mythos ×100.
   - **Infra** multiplies your agents: Laptop → GPU ×2 → Rack ×4 → Data center ×8 → Cluster ×16.
@@ -17,8 +18,8 @@ A Claude-themed idle game that lives above your [Claude Code](https://claude.com
   - every tool call Claude makes is a free hit
   - every finished turn is a guaranteed crit
   - while you're away your agents keep working at half pace, up to 4 hours (8 with WebSearch), paid out when you come back
-- **Train a new model** (prestige): once you've earned 50K ✦ in a run, reset for a permanent point. Every point is +50% to prompts and agents, forever. Points scale with the square root of what you earned, so a 200K run is worth two.
-- **The band** above the prompt shows the task, its progress bar, your tokens, income per second and power per hit, with **Prompt ⚡**, **Shop** and **Hide** buttons. Once the band has focus (ctrl+x tab in the terminal), `p` prompts.
+- **Train a new model** (prestige): once you've earned 250K ✦ in a run, reset for a permanent point. Every point is +50% to prompts and agents, forever. Points scale with the square root of what you earned, so a 1M run is worth two.
+- **The band** above the prompt shows the task, its progress bar, your tokens, income per second and power per hit, with **Prompt ⚡** and **Shop 🛒** buttons and a faint *hide* in the corner. Once the band has focus (ctrl+x tab in the terminal), `p` prompts.
 - **`/idle`** opens the shop pane (and prints where you stand). While the pane has focus, the digit and letter on each button buy things: `1`–`4` agents, `m` model, `i` infra, `r` `e` `b` `g` `w` tools, `t` train, `p` prompt.
 - **Saved across sessions** every 15 seconds and after each turn, play time included: the shop's Stats card shows how much you've gathered and how long you've played. Toasts for upgrades, offline earnings and the odd bonus crit; turn them off with the Popups button in the shop.
 
@@ -75,7 +76,7 @@ Write the full path. Older versions don't expand `~` here, so `~/.claude/mods/to
 
 ## Tuning
 
-All the numbers live at the top of [`hooks/register.tsx`](hooks/register.tsx): the task names (`TASKS`), the agents (`GENS`), the model and infra tiers (`MODELS`, `INFRA`), the tools (`TOOLS`), task HP and rewards (`taskHp`, `taskReward`, 28% more HP per task), the crit multiplier, and how many tokens a prestige point costs (`POINT_EVERY`). The sprites are letter grids just below.
+All the numbers live at the top of [`hooks/register.tsx`](hooks/register.tsx): the task names (`TASKS`), the agents (`GENS`), the model and infra tiers (`MODELS`, `INFRA`), the tools (`TOOLS`), task HP and rewards (`taskHp`, `taskReward`, 33% more HP per task), the crit multiplier, the agent milestones (`MILESTONES`) and how many tokens a prestige point costs (`POINT_EVERY`). The sprites are letter grids just below: a 16×18 bot and four 24×18 task shapes, drawn at 2 CSS pixels per cell on the desktop and shrunk to half for the terminal.
 
 Check your changes with:
 
