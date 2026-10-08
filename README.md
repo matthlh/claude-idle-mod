@@ -1,8 +1,8 @@
 # Token Tycoon 🤖
 
-A Claude-themed idle game that lives above your [Claude Code](https://claude.com/claude-code) prompt. A little bot chips away at a task block; you prompt it, hire agents, upgrade your model and infra, and your real Claude Code work counts too. Think Idle Mine, but the ore is a backlog.
+A Claude-themed idle game that lives above your [Claude Code](https://claude.com/claude-code) prompt. A little mechanic chips away at a task block; you prompt it, hire agents, upgrade your model and infra, and your real Claude Code work counts too. Think Idle Mine, but the ore is a backlog.
 
-![The bot hitting tasks: an ore rock, a cracking crystal, a chip taking a hit, a bug taking a crit, nearly cleared, cleared](docs/preview.svg)
+![The mechanic hitting tasks: an ore rock, a cracking crystal, a chip taking a hit, a bug taking a crit, nearly cleared, cleared](docs/preview.svg)
 
 ## How it plays
 

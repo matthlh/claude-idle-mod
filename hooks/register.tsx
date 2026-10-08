@@ -204,45 +204,46 @@ export function nextTier(list: Tier[], at: number): Tier | null {
 // Letter grids: '.' is transparent. The bot has two frames; the block cracks
 // as its HP drops and changes color with each task.
 
+// A chibi mechanic in a Claude hoodie: frame B swings a wrench.
 const BOT_A = [
-  '..t....kk....t..',
-  '...t...kk...t...',
   '....hhhhhhhh....',
   '...hhhhhhhhhh...',
-  '..hhEEhhhhEEhh..',
-  '..hhEehhhhEehh..',
-  '..hhEEhhhhEEhh..',
   '..hhhhhhhhhhhh..',
-  '...hhhhVVhhhh...',
-  '....hhhhhhhh....',
-  '......dddd......',
-  '...wwbbccbbww...',
-  '..w.bbbccbbb.w..',
-  '..w.bbbbbbbb.w..',
+  '..hhffffffffhh..',
+  '..hfEEffffEEfh..',
+  '..hfEeffffEefh..',
+  '..hfEEffffEEfh..',
+  '..hffffffffffh..',
+  '...ffffVVffff...',
+  '....ffffffff....',
+  '......nnnn......',
+  '...wwooooooww...',
+  '..w.oooccooo.w..',
+  '..w.oooooooo.w..',
   '....ssssssss....',
-  '.....ll..ll.....',
-  '.....ll..ll.....',
-  '....lll..lll....',
+  '.....pp..pp.....',
+  '.....pp..pp.....',
+  '....bbb..bbb....',
 ]
 const BOT_B = [
-  '..t....kk....t.T',
-  '...t...kk...t.T.',
-  '....hhhhhhhh..T.',
-  '...hhhhhhhhhh.w.',
-  '..hhEEhhhhEEhhw.',
-  '..hhEehhhhEehww.',
-  '..hhEEhhhhEEhw..',
-  '..hhhhhhhhhhhw..',
-  '...hhhhVVhhhhw..',
-  '....hhhhhhhhw...',
-  '......dddd.w....',
-  '...wwbbccbbw....',
-  '..w.bbbccbbb....',
-  '..w.bbbbbbbb....',
+  '....hhhhhhhh...T',
+  '...hhhhhhhhhh.T.',
+  '..hhhhhhhhhhhhT.',
+  '..hhffffffffhhw.',
+  '..hfEEffffEEfhw.',
+  '..hfEeffffEefww.',
+  '..hfEEffffEEfw..',
+  '..hffffffffffw..',
+  '...ffffVVffffw..',
+  '....ffffffffw...',
+  '......nnnn.w....',
+  '...wwoooooow....',
+  '..w.oooccooo....',
+  '..w.oooooooo....',
   '....ssssssss....',
-  '.....ll..ll.....',
-  '.....ll..ll.....',
-  '....lll..lll....',
+  '.....pp..pp.....',
+  '.....pp..pp.....',
+  '....bbb..bbb....',
 ]
 // Four shapes, one per task in turn: an ore rock, a crystal, a chip, a bug.
 // F face, L lit edge, D dark edge, H highlight, X texture.
@@ -336,7 +337,7 @@ const CRACKS: [number, number][][] = [
   [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
 ]
 export type Palette = Record<string, number>
-const BOT_PAL: Palette = { k: 0xd97757, t: 0xffd54a, T: 0xffd54a, h: 0xeeeae2, d: 0x9c978e, V: 0x3a3a46, E: 0x3fb8f0, e: 0xffffff, b: 0xd97757, s: 0xa8553a, c: 0x7ff0ff, w: 0x8a8580, l: 0x6f6a64 }
+const BOT_PAL: Palette = { h: 0x5a3b2e, f: 0xf6d2b3, n: 0xdcb18f, E: 0x3fb8f0, e: 0xffffff, V: 0xb0555b, o: 0xd97757, s: 0xa8553a, c: 0xf4ece2, w: 0xf6d2b3, p: 0x3c4a7a, b: 0x2b2b30, T: 0xffd54a }
 // One block color per task, cycling: [face, light, dark].
 const BLOCK_COLORS: [number, number, number][] = [
   [0xd97757, 0xf0a284, 0x9a4d33], // Claude orange
@@ -427,19 +428,8 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
   return out
 }
 
-const CARD = '#17171b'
 const svgOpen = (w: number) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible" style="background:transparent">`
-// A dark card behind the art, rounded on the outer corners only, so the two
-// halves meet without a seam.
-const card = (w: number, side: 'left' | 'right' | 'both') => {
-  const h = SCENE_PX_H
-  const r = 6
-  const tl = side !== 'right' ? r : 0
-  const tr = side !== 'left' ? r : 0
-  return `<path fill="${CARD}" d="M${tl},0 H${w - tr} ${tr ? `A${r},${r} 0 0 1 ${w},${r}` : ''} V${h - tr} ${tr ? `A${r},${r} 0 0 1 ${w - tr},${h}` : ''} H${tl} ${tl ? `A${r},${r} 0 0 1 0,${h - tl}` : ''} V${tl} ${tl ? `A${r},${r} 0 0 1 ${tl},0` : ''} Z"/>`
-}
-
 function botBody(dx: number): string {
   const f: Fx = { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }
   const a = scenePixels(FRESH, f, 0, 0)
@@ -468,15 +458,15 @@ function blockBody(s: Save, f: Fx, now: number, dx: number): string {
 
 let botCache: string | null = null
 export function botSvg(): string {
-  if (!botCache) botCache = svgOpen(BOT_W) + card(BOT_W, 'left') + botBody(0) + '</svg>'
+  if (!botCache) botCache = svgOpen(BOT_W) + botBody(0) + '</svg>'
   return botCache
 }
 export function blockSvg(s: Save, f: Fx, now: number): string {
-  return svgOpen(BLOCK_W) + card(BLOCK_W, 'right') + blockBody(s, f, now, SPLIT_X) + '</svg>'
+  return svgOpen(BLOCK_W) + blockBody(s, f, now, SPLIT_X) + '</svg>'
 }
 // The whole scene in one SVG, for docs and tests.
 export function sceneSvg(s: Save, f: Fx, now: number): string {
-  return svgOpen(SCENE_W * PX) + card(SCENE_W * PX, 'both') + botBody(0) + blockBody(s, f, now, 0) + '</svg>'
+  return svgOpen(SCENE_W * PX) + botBody(0) + blockBody(s, f, now, 0) + '</svg>'
 }
 
 // Terminal: the scene as a Raster of half blocks, two pixels per cell.
@@ -799,7 +789,7 @@ export const register: Register = on => {
     const COL = narrow ? 9 : 12
     const BAR = COL * 3 - 5
     const col = (icon: string, value: string, label: string, color?: string) => (
-      <Box width={COL} flexGrow={1} flexShrink={1}>
+      <Box width={COL} flexShrink={0}>
         <Text wrap="truncate">
           <Text color={color} bold={color === 'yellow'}>{`${icon}${value}`}</Text>
           <Text dimColor>{label}</Text>
@@ -809,7 +799,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" paddingX={1} rowGap={1}>
-        <Box flexDirection="row" alignItems="flex-start" columnGap={3}>
+        <Box flexDirection="row" alignItems="center" columnGap={3}>
           {art}
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">
