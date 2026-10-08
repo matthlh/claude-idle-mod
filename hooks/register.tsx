@@ -642,34 +642,34 @@ export const register: Register = on => {
     const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
 
     return (
-      <Box flexDirection="column" paddingX={1}>
-        <Box flexDirection="row" alignItems="center" columnGap={2}>
-          {art}
-          <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-            <Text wrap="truncate-end">
-              <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
-              <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1}`}</Text>
-            </Text>
-            <Text wrap="truncate-end">
-              <Text color={barColor}>{bar(done, narrow ? 12 : 24)}</Text>
-              <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
-            </Text>
-            <Text wrap="truncate-end">
-              <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
-              <Text dimColor>{` tokens`}</Text>
-              <Text dimColor>{'     '}</Text>
-              <Text color="green">{`+${fmt(dps(s))}`}</Text>
-              <Text dimColor>{` per second`}</Text>
-              <Text dimColor>{'     '}</Text>
-              <Text>{`⚡ ${fmt(power(s))}`}</Text>
-              <Text dimColor>{` per prompt`}</Text>
-            </Text>
-          </Box>
+      <Box flexDirection="row" alignItems="center" columnGap={2} paddingX={1}>
+        {art}
+        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+          <Text wrap="truncate-end">
+            <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
+            <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1}`}</Text>
+          </Text>
+          <Text wrap="truncate-end">
+            <Text color={barColor}>{bar(done, narrow ? 12 : 24)}</Text>
+            <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
+          </Text>
+          <Text wrap="truncate-end">
+            <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
+            <Text dimColor>{' tok'}</Text>
+            <Text dimColor>{'    '}</Text>
+            <Text color="green">{`+${fmt(dps(s))}`}</Text>
+            <Text dimColor>{'/sec'}</Text>
+            <Text dimColor>{'    '}</Text>
+            <Text>{`⚡ ${fmt(power(s))}`}</Text>
+            <Text dimColor>{'/prmt'}</Text>
+          </Text>
         </Box>
-        <Box flexDirection="row" columnGap={1}>
+        <Box flexDirection="column" rowGap={0} flexShrink={0} alignItems="flex-end">
           <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
-          <Button key="shop" label="Shop" onPress={ignorePress} />
-          <Button key="hide" label="Hide" onPress={ignorePress} />
+          <Box flexDirection="row" columnGap={1}>
+            <Button key="shop" label="Shop" onPress={ignorePress} />
+            <Button key="hide" label="Hide" onPress={ignorePress} />
+          </Box>
         </Box>
       </Box>
     )
@@ -743,20 +743,20 @@ export const register: Register = on => {
             <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
           </Text>
           <Box flexDirection="row" paddingTop={1} columnGap={2} flexWrap="wrap">
-            {stat('✦', fmt(s.tokens), 'tokens', 'yellow')}
-            {stat('▲', `${fmt(dps(s))}/s`, 'from agents', 'green')}
-            {stat('⚡', fmt(power(s)), 'per prompt')}
-            {stat('✧', `${Math.round(critChance(s) * 100)}%`, `crit chance, ×${CRIT_MULT}`)}
+            {stat('✦', fmt(s.tokens), 'tok', 'yellow')}
+            {stat('▲', `${fmt(dps(s))}`, '/sec', 'green')}
+            {stat('⚡', fmt(power(s)), '/prmt')}
+            {stat('✧', `${Math.round(critChance(s) * 100)}%`, `crit ×${CRIT_MULT}`)}
           </Box>
           <Box flexDirection="row" columnGap={1} paddingTop={1}>
             <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
-            <Text dimColor>hotkeys work while the pane has focus</Text>
+            <Text dimColor>p / 1-4 / m i / r e b g w / t</Text>
           </Box>
         </Box>
 
         {section('Agents', GENS.map(g => {
           const n = s.owned[g.id] ?? 0
-          return row(`buy-${g.id}`, n ? `${g.label} ×${n}` : g.label, g.hotkey, genCost(g, n), `+${fmt(g.dps * perAgent)} per second each`)
+          return row(`buy-${g.id}`, n ? `${g.label} ×${n}` : g.label, g.hotkey, genCost(g, n), `+${fmt(g.dps * perAgent)}/sec each`)
         }))}
 
         {section('Upgrades', [
@@ -776,17 +776,17 @@ export const register: Register = on => {
               <Box width={18} flexShrink={0}>
                 <Button key="train" label={`Train (+${pts})`} hotkey="t" variant="primary" onPress={ignorePress} />
               </Box>
-              <Text dimColor wrap="truncate-end">{`start over with everything ×${prestigeMult(s.points + pts)}, forever`}</Text>
+              <Text dimColor wrap="truncate-end">{`reset run · ×${prestigeMult(s.points + pts)} forever`}</Text>
             </Box>
           ) : (
-            <Text dimColor wrap="truncate-end">{`earn ${fmt(nextPointAt)} ✦ in this run to train one (${fmt(s.earned)} so far)`}</Text>
+            <Text dimColor wrap="truncate-end">{`${fmt(s.earned)} / ${fmt(nextPointAt)} ✦ this run`}</Text>
           ),
-          <Text dimColor>{`trained ${s.trained} · ${s.points} point${s.points === 1 ? '' : 's'} · everything ×${prestigeMult(s.points)}`}</Text>,
+          <Text dimColor>{`${s.trained} trained · ${s.points} pts · ×${prestigeMult(s.points)}`}</Text>,
         ])}
 
         {section('Stats', [
-          <Text dimColor wrap="truncate-end">{`${fmt(s.clicks)} prompts · ${fmt(s.bonusHits)} free hits from real work · ${fmt(s.cleared)} tasks cleared · ${fmt(s.lifetime)} ✦ lifetime`}</Text>,
-          <Text dimColor wrap="truncate-end">{`every tool call is a free hit, every finished turn a crit; agents keep going while you're away (half pace, up to ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h)`}</Text>,
+          <Text dimColor wrap="truncate-end">{`${fmt(s.clicks)} prompts · ${fmt(s.bonusHits)} free hits · ${fmt(s.cleared)} cleared · ${fmt(s.lifetime)} ✦ total`}</Text>,
+          <Text dimColor wrap="truncate-end">{`tool call = free hit · turn = crit · offline ½ pace, ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h max`}</Text>,
           <Box paddingTop={1}>
             <Button key="popups" label={`Popups: ${p.popups ? 'On' : 'Off'}`} onPress={ignorePress} />
           </Box>,
