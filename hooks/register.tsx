@@ -449,9 +449,10 @@ function moodFrames(md: Mood, f: Fx, now: number): { frames: number[]; dur: numb
   if (md === 'oops') return { frames: [F.oops], dur: 1 }
   return { frames: [F.idle, F.idle, F.blink, F.idle, F.lookUp, F.idle, F.eyesClosed], dur: 0.9 }
 }
+// A frame is a set of paths in FRAME_SIZE units, scaled to the character box.
 function frameImage(i: number, dx: number): string {
-  const b64 = FRAMES[i] ?? FRAMES[0] ?? ''
-  return `<image x="${dx}" y="0" width="${CHAR_PX}" height="${CHAR_PX}" href="data:image/png;base64,${b64}"/>`
+  const k = (CHAR_PX / FRAME_SIZE).toFixed(4)
+  return `<g transform="translate(${dx} 0) scale(${k})">${FRAMES[i] ?? FRAMES[0] ?? ''}</g>`
 }
 // Each frame is a group shown during its slot of one repeating cycle.
 function botBodyFor(md: Mood, f: Fx, now: number, dx: number): string {
