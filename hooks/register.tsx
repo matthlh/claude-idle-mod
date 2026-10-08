@@ -248,11 +248,11 @@ const COIN_PAL: Palette = { L: 0xfff3b0, H: 0xffe066, F: 0xf5c542, W: 0xfffbe8, 
 const FRENZY_PAL: Palette = { L: 0xffd0a0, H: 0xffa54a, F: 0xf58a2a, W: 0xfff4d6, D: 0xb35a10 }
 const SPARK = 0xffe66d
 
-export const SCENE_W = 56
-export const SCENE_H = 28
+export const SCENE_W = 48
+export const SCENE_H = 32
 const BOT_X = 3
-const COIN_X = 31
-const COIN_Y = 5
+const COIN_X = 24
+const COIN_Y = 7
 const PX = 3
 
 type Pixels = (number | undefined)[]
@@ -271,13 +271,13 @@ function plot(pixels: Pixels, rows: string[], x0: number, y0: number, pal: Palet
 export function scenePixels(s: Save, f: Fx, now: number, frame: 0 | 1): Pixels {
   const pixels: Pixels = new Array(SCENE_W * SCENE_H)
   const hitting = now - f.at < 400 && (f.kind === 'click' || f.kind === 'free' || f.kind === 'crit')
-  plot(pixels, frame ? BOT_B : BOT_A, BOT_X, 5, BOT_PAL)
+  plot(pixels, frame ? BOT_B : BOT_A, BOT_X, 7, BOT_PAL)
   plot(pixels, COIN, COIN_X, COIN_Y, isFrenzy(s, now) ? FRENZY_PAL : COIN_PAL)
   if (hitting || isFrenzy(s, now)) {
     const sp = { S: SPARK }
-    plot(pixels, ['S...', '.S..', '..S.', '.S..', 'S...'], COIN_X - 5, 8, sp)
-    plot(pixels, ['...S', '..S.', '.S..', '..S.', '...S'], COIN_X + 21, 8, sp)
-    if (f.kind === 'crit' && hitting) plot(pixels, ['S.S', '.S.', 'S.S'], COIN_X + 8, 1, sp)
+    plot(pixels, ['S...', '.S..', '..S.', '.S..', 'S...'], COIN_X - 4, 10, sp)
+    plot(pixels, ['...S', '..S.', '.S..', '..S.', '...S'], COIN_X + 20, 10, sp)
+    if (f.kind === 'crit' && hitting) plot(pixels, ['S.S', '.S.', 'S.S'], COIN_X + 8, 2, sp)
   }
   return pixels
 }
@@ -288,7 +288,7 @@ const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 // The coder (frames.ts) never changes with the score, so her animation keeps
 // running; the coin redraws when a press lands.
 export const SPLIT_X = 22
-export const CHAR_PX = 84
+export const CHAR_PX = 96
 export const PORTRAIT_W = CHAR_PX
 export const PORTRAIT_H = CHAR_PX
 const BOT_W = PORTRAIT_W
@@ -314,34 +314,30 @@ const svgOpen = (w: number) =>
 const F = { idle: 0, eyesClosed: 1, lookUp: 2, blink: 3, typing: 4, thinking: 5, sleep1: 6, sleep2: 7, oops: 8, cheer1: 9, cheer2: 10, over1: 11, over2: 12, hit: 13 }
 type Slot = [number, number]
 type Scene = { base: number; cycle: number; extras: { frame: number; slots: Slot[] }[]; motion: string }
+export type BotState = Mood | 'frenzy'
 // A bob with a little squash and stretch, anchored at the feet.
 const bob = (px: number, dur: number, squash = 0.02) =>
   `<animateTransform attributeName="transform" type="translate" values="0 0;0 ${-px};0 0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" dur="${dur}s" repeatCount="indefinite" additive="sum"/>` +
   `<animateTransform attributeName="transform" type="scale" values="1 1;${1 - squash} ${1 + squash};1 1" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" dur="${dur}s" repeatCount="indefinite" additive="sum"/>`
 const shake = (px: number, dur: number) =>
   `<animateTransform attributeName="transform" type="translate" values="0 0;${px} 0;0 0;${-px} 0;0 0" dur="${dur}s" repeatCount="indefinite"/>`
-function sceneFor(md: Mood, f: Fx, now: number): Scene {
-  const age = now - f.at
-  if (age < 500 && (f.kind === 'click' || f.kind === 'free'))
-    return { base: F.hit, cycle: 1, extras: [], motion: `<animateTransform attributeName="transform" type="scale" values="1 1;1.08 0.9;0.97 1.04;1 1" dur="0.35s" repeatCount="1"/>` }
-  if (age < 1200 && f.kind === 'crit')
-    return { base: F.over1, cycle: 0.4, extras: [{ frame: F.over2, slots: [[0.5, 1]] }], motion: shake(1, 0.16) }
-  if (age < 1500 && (f.kind === 'frenzy' || f.kind === 'buy' || f.kind === 'offline'))
-    return { base: F.cheer1, cycle: 0.7, extras: [{ frame: F.cheer2, slots: [[0.5, 1]] }], motion: bob(5, 0.35, 0.06) }
-  if (md === 'working')
-    return { base: F.typing, cycle: 6, extras: [{ frame: F.thinking, slots: [[0.55, 0.8]] }], motion: bob(1.5, 0.8, 0.025) }
-  if (md === 'sleep')
+function sceneFor(st: BotState): Scene {
+  if (st === 'frenzy')
+    return { base: F.cheer1, cycle: 0.8, extras: [{ frame: F.cheer2, slots: [[0.5, 1]] }], motion: bob(4, 0.4, 0.05) }
+  if (st === 'working')
+    return { base: F.typing, cycle: 9, extras: [{ frame: F.thinking, slots: [[0.6, 0.8]] }], motion: bob(1.5, 0.8, 0.025) }
+  if (st === 'sleep')
     return { base: F.sleep1, cycle: 3, extras: [{ frame: F.sleep2, slots: [[0.5, 1]] }], motion: bob(1, 3, 0.015) }
-  if (md === 'oops')
+  if (st === 'oops')
     return { base: F.oops, cycle: 1, extras: [], motion: shake(0.6, 0.5) }
   return {
     base: F.idle,
-    cycle: 14,
+    cycle: 30,
     extras: [
-      { frame: F.blink, slots: [[0.22, 0.23], [0.58, 0.59], [0.86, 0.87]] },
-      { frame: F.lookUp, slots: [[0.4, 0.5]] },
+      { frame: F.blink, slots: [[0.15, 0.155], [0.48, 0.485], [0.83, 0.835]] },
+      { frame: F.lookUp, slots: [[0.62, 0.7]] },
     ],
-    motion: bob(2, 2.4, 0.03),
+    motion: bob(2, 2.6, 0.03),
   }
 }
 // A frame is a set of paths in FRAME_SIZE units, scaled to the character box.
@@ -360,8 +356,8 @@ function stepped(slots: Slot[], cycle: number, inside: number): string {
   }
   return `<animate attributeName="opacity" values="${vals.join(';')}" keyTimes="${marks.map(v => v.toFixed(3)).join(';')}" dur="${cycle}s" calcMode="discrete" repeatCount="indefinite"/>`
 }
-function botBodyFor(md: Mood, f: Fx, now: number, dx: number): string {
-  const sc = sceneFor(md, f, now)
+function botBodyFor(st: BotState, dx: number): string {
+  const sc = sceneFor(st)
   const all = sc.extras.flatMap(x => x.slots)
   let out = `<g>${frameImage(sc.base, dx)}${all.length ? stepped(all, sc.cycle, 0) : ''}</g>`
   for (const x of sc.extras) out += `<g>${frameImage(x.frame, dx)}${stepped(x.slots, sc.cycle, 1)}</g>`
@@ -369,7 +365,7 @@ function botBodyFor(md: Mood, f: Fx, now: number, dx: number): string {
 }
 // The docs and the tests still get a frame without a mood.
 function botBody(dx: number): string {
-  return botBodyFor('idle', { at: 0, gain: 0, kind: null }, 1e9, dx)
+  return botBodyFor('idle', dx)
 }
 
 // The coin half: squashes when a press lands, with the gain floating up.
@@ -380,7 +376,7 @@ function blockBody(s: Save, f: Fx, now: number, dx: number): string {
   const cx = (COIN_X + 10 - dx) * PX
   const cy = (COIN_Y + 9) * PX
   const squash = pressed
-    ? `<animateTransform attributeName="transform" type="scale" values="1 1;${f.kind === 'crit' ? '1.18 0.8' : '1.1 0.88'};0.96 1.05;1 1" dur="0.3s" begin="0s" repeatCount="1"/>`
+    ? `<animateTransform attributeName="transform" type="scale" values="1 1;${f.kind === 'crit' ? '1.25 0.75' : '1.1 0.88'};0.96 1.05;1 1" dur="${f.kind === 'crit' ? '0.45s' : '0.3s'}" begin="0s" repeatCount="1"/>`
     : isFrenzy(s, now)
       ? `<animateTransform attributeName="transform" type="scale" values="1 1;1.05 1.05;1 1" dur="0.5s" repeatCount="indefinite"/>`
       : `<animateTransform attributeName="transform" type="scale" values="1 1;1.02 1.02;1 1" dur="2.4s" repeatCount="indefinite"/>`
@@ -395,9 +391,10 @@ function blockBody(s: Save, f: Fx, now: number, dx: number): string {
   return `<g transform-origin="${cx} ${cy}" style="transform-origin:${cx}px ${cy}px">${rects(pix, SPLIT_X, SCENE_W, dx)}${squash}</g>${pop}`
 }
 
-export function botSvg(md: Mood = 'idle', f?: Fx, now = 0): string {
-  const body = f ? botBodyFor(md, f, now, 0) : botBody(0)
-  return svgOpen(BOT_W) + body + '</svg>'
+// Only the mood (and a frenzy) changes this source, so clicks and the score
+// never restart her animation.
+export function botSvg(st: BotState = 'idle'): string {
+  return svgOpen(BOT_W) + botBodyFor(st, 0) + '</svg>'
 }
 export function blockSvg(s: Save, f: Fx, now: number): string {
   return svgOpen(BLOCK_W) + blockBody(s, f, now, SPLIT_X) + '</svg>'
@@ -614,10 +611,9 @@ export const register: Register = on => {
       const rate = dps(cur, t)
       if (rate > 0) {
         pending += rate
-        // Redraw only every few seconds (or when a frenzy ends), so the
-        // character's animation isn't restarted every second.
+        // Redraw only every few seconds (or when a frenzy ends).
         const frenzyJustEnded = cur.frenzyUntil && t >= cur.frenzyUntil && t - cur.frenzyUntil < 1000
-        if (ticks % 4 === 0 || frenzyJustEnded) {
+        if (ticks % 5 === 0 || frenzyJustEnded) {
           const gain = pending
           pending = 0
           await commit($, earn(cur, gain))
@@ -760,7 +756,7 @@ export const register: Register = on => {
         <Raster key="scene" columns={CELL_W} rows={SCENE_ROWS} cells={sceneCells(s, f, now)} />
       ) : (
         <Box flexDirection="row" flexShrink={0}>
-          <Svg source={botSvg(md, f, now)} alt={`the coder, ${md}`} width={BOT_W} height={SCENE_PX_H} isInteractive />
+          <Svg source={botSvg(frenzyLeft > 0 && md !== 'sleep' ? 'frenzy' : md)} alt={`the coder, ${md}`} width={BOT_W} height={SCENE_PX_H} isInteractive />
           <Svg source={blockSvg(s, f, now)} alt={`${fmt(s.tokens)} tokens`} width={BLOCK_W} height={SCENE_PX_H} isInteractive />
         </Box>
       )
