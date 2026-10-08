@@ -16,6 +16,7 @@ export type Save = {
   points: number
   trained: number
   bonusHits: number
+  played: number
   savedAt: number
 }
 

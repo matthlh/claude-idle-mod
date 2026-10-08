@@ -22,6 +22,7 @@ export const FRESH: Save = {
   points: 0,
   trained: 0,
   bonusHits: 0,
+  played: 0,
   savedAt: 0,
 }
 
@@ -209,23 +210,60 @@ const BOT_B = [
   '..l..l..',
   '..l..l..',
 ]
-const BLOCK = [
-  '.LLLLLLLL.',
-  'LFFFFFFFFD',
-  'LFFFFFFFFD',
-  'LFFFFFFFFD',
-  'LFFFFFFFFD',
-  'LFFFFFFFFD',
-  'LFFFFFFFFD',
-  'LFFFFFFFFD',
-  '.DDDDDDDD.',
+// Four shapes, one per task in turn: an ore rock, a crystal, a chip, a bug.
+// F face, L lit edge, D dark edge, H highlight, X texture.
+const SHAPES: string[][] = [
+  [
+    '....LLLL....',
+    '..LLFFFFL...',
+    '.LFHFFFXFD..',
+    'LFFFFFXFFFD.',
+    'LFXFFFFFFDD.',
+    'LFFFFXFFDDD.',
+    '.DFFFFFDXDD.',
+    '..DDXDDDDD..',
+    '....DDDD....',
+  ],
+  [
+    '....LLLL....',
+    '...LHHFFL...',
+    '..LHFFFFFD..',
+    '.LHFFFXFFFD.',
+    'LFFFFFFFFFFD',
+    '.DFFXFFFFFD.',
+    '..DFFFFXFD..',
+    '...DFFFFD...',
+    '....DDDD....',
+  ],
+  [
+    '.D.D.D.D.D..',
+    'LLLLLLLLLLL.',
+    'LFFFFFFFFFD.',
+    'LFXFFXFFXFD.',
+    'LFFFFFFFFFD.',
+    'LFXFFXFFXFD.',
+    'LFFFFFFFFFD.',
+    'DDDDDDDDDDD.',
+    '.D.D.D.D.D..',
+  ],
+  [
+    '..L......L..',
+    '...D....D...',
+    '..LLFFFFLL..',
+    '.LFFHFFFFFD.',
+    'LFFFFXFFFFFD',
+    'LFFFXFXFFFFD',
+    '.LFFFXFFFFD.',
+    '..DFFFFFFD..',
+    '...DDDDDD...',
+  ],
 ]
 // Crack pixels [x, y] added at each stage of damage.
 const CRACKS: [number, number][][] = [
   [[4, 1], [4, 2], [5, 3]],
   [[5, 4], [6, 5], [3, 4], [2, 5]],
   [[6, 6], [7, 7], [1, 2], [2, 3], [7, 2]],
-  [[8, 1], [3, 6], [4, 7], [1, 6], [6, 2], [8, 5]],
+  [[8, 1], [3, 6], [4, 7], [1, 6], [6, 2], [8, 5], [9, 3], [10, 4]],
 ]
 export type Palette = Record<string, number>
 const BOT_PAL: Palette = { k: 0xd97757, h: 0xc9c4bb, E: 0x3fb8f0, b: 0xd97757, w: 0x8a8580, l: 0x6f6a64 }
@@ -246,21 +284,26 @@ export function crackStage(hp: number, max: number): number {
   return lost >= 0.8 ? 4 : lost >= 0.6 ? 3 : lost >= 0.4 ? 2 : lost >= 0.2 ? 1 : 0
 }
 
-function blockRows(stage: number): string[] {
-  const rows = BLOCK.map(r => r.split(''))
-  for (let i = 0; i < stage; i++) for (const [x, y] of CRACKS[i] ?? []) if (rows[y]) rows[y]![x] = 'C'
+function blockRows(level: number, stage: number): string[] {
+  const shape = SHAPES[level % SHAPES.length] ?? SHAPES[0]!
+  const rows = shape.map(r => r.split(''))
+  for (let i = 0; i < stage; i++)
+    for (const [x, y] of CRACKS[i] ?? []) {
+      const row = rows[y]
+      if (row && row[x] !== undefined && row[x] !== '.') row[x] = 'C'
+    }
   return rows.map(r => r.join(''))
 }
 
 function blockPal(level: number): Palette {
   const [F, L, D] = BLOCK_COLORS[level % BLOCK_COLORS.length] ?? [0xd97757, 0xf0a284, 0x9a4d33]
-  return { F, L, D, C: CRACK }
+  return { F, L, D, C: CRACK, H: mix(L, 0xffffff, 0.45), X: mix(F, D, 0.55) }
 }
 
 export const SCENE_W = 28
 export const SCENE_H = 10
 const BOT_X = 2
-const BLOCK_X = 16
+const BLOCK_X = 15
 const PX = 4
 
 type Pixels = (number | undefined)[]
@@ -280,13 +323,19 @@ export function scenePixels(s: Save, f: Fx, now: number, frame: 0 | 1): Pixels {
   const pixels: Pixels = new Array(SCENE_W * SCENE_H)
   const hitting = now - f.at < 400
   plot(pixels, frame ? BOT_B : BOT_A, BOT_X, 1, BOT_PAL)
-  plot(pixels, blockRows(crackStage(s.hp, taskHp(s.level))), BLOCK_X, 1, blockPal(s.level))
+  plot(pixels, blockRows(s.level, crackStage(s.hp, taskHp(s.level))), BLOCK_X, 1, blockPal(s.level))
   if (hitting) {
     const sp = { S: SPARK }
     plot(pixels, ['S.', '.S', 'S.'], BLOCK_X - 3, 3, sp)
-    if (f.isCrit) plot(pixels, ['.S', 'S.', '.S'], BLOCK_X - 5, 6, sp)
+    if (f.isCrit) plot(pixels, ['.S', 'S.', '.S'], BLOCK_X - 4, 6, sp)
   }
   return pixels
+}
+
+// Blends two 0xRRGGBB colors, t of the way from a to b.
+function mix(a: number, b: number, t: number): number {
+  const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t)
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0)
 }
 
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
@@ -396,6 +445,16 @@ export function bar(frac: number, width: number): string {
 function ignorePress() {}
 
 let dirty = false
+// Seconds played since the last save, folded in by persist.
+let playedAcc = 0
+
+export function fmtTime(ms: number): string {
+  const m = Math.floor(ms / 60_000)
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `${h}h ${m % 60}m`
+  return `${Math.floor(h / 24)}d ${h % 24}h`
+}
 
 async function toast($: EngineInterface, text: string) {
   if ((await read($, prefs)).popups) $.ui.toast(text)
@@ -408,7 +467,8 @@ async function commit($: EngineInterface, s: Save) {
 
 async function persist($: EngineInterface) {
   const s = await read($, save)
-  const stamped = { ...s, savedAt: await $.clock.now() }
+  const stamped = { ...s, played: (s.played ?? 0) + playedAcc, savedAt: await $.clock.now() }
+  playedAcc = 0
   await update($, save, () => stamped)
   await $.store.set('save', stamped)
   dirty = false
@@ -477,7 +537,7 @@ function summary(s: Save): string[] {
     `✦ ${fmt(s.tokens)} tokens, +${fmt(dps(s))}/s, ⚡ ${fmt(power(s))} per prompt (${modelAt(s.model).label}, ${infraAt(s.infra).label}, crit ${Math.round(critChance(s) * 100)}%)`,
     `Agents: ${GENS.map(g => `${s.owned[g.id] ?? 0} ${g.label.toLowerCase()}`).join(', ')}`,
     `Tools: ${TOOLS.filter(t => s.tools[t.id]).map(t => t.label).join(', ') || 'none yet'}`,
-    `Prompts ${fmt(s.clicks)}, free hits from real work ${fmt(s.bonusHits)}, tasks cleared ${fmt(s.cleared)}, lifetime ✦ ${fmt(s.lifetime)}`,
+    `Gathered ✦ ${fmt(s.lifetime)} over ${fmtTime((s.played ?? 0) + playedAcc)} · prompts ${fmt(s.clicks)}, free hits ${fmt(s.bonusHits)}, tasks cleared ${fmt(s.cleared)}`,
     `Models trained: ${s.trained} (${s.points} points, ×${prestigeMult(s.points)})${pts >= 1 ? `, ${pts} more ready to claim in the shop` : ''}`,
   ]
 }
@@ -515,6 +575,8 @@ export const register: Register = on => {
     let ticks = 0
     $.clock.every(1000, async () => {
       ticks++
+      playedAcc += 1000
+      dirty = true
       const cur = await read($, save)
       const rate = dps(cur)
       if (rate > 0) {
@@ -785,7 +847,13 @@ export const register: Register = on => {
         ])}
 
         {section('Stats', [
-          <Text dimColor wrap="truncate-end">{`${fmt(s.clicks)} prompts · ${fmt(s.bonusHits)} free hits · ${fmt(s.cleared)} cleared · ${fmt(s.lifetime)} ✦ total`}</Text>,
+          <Box flexDirection="row" columnGap={2} flexWrap="wrap">
+            {stat('✦', fmt(s.lifetime), 'gathered', 'yellow')}
+            {stat('◷', fmtTime((s.played ?? 0) + playedAcc), 'played')}
+            {stat('⚡', fmt(s.clicks), 'prompts')}
+            {stat('✓', fmt(s.cleared), 'cleared')}
+          </Box>,
+          <Text dimColor wrap="truncate-end">{`${fmt(s.bonusHits)} free hits from real work`}</Text>,
           <Text dimColor wrap="truncate-end">{`tool call = free hit · turn = crit · offline ½ pace, ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h max`}</Text>,
           <Box paddingTop={1}>
             <Button key="popups" label={`Popups: ${p.popups ? 'On' : 'Off'}`} onPress={ignorePress} />

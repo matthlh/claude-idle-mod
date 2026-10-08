@@ -2,11 +2,11 @@
 
 A Claude-themed idle game that lives above your [Claude Code](https://claude.com/claude-code) prompt. A little bot chips away at a task block; you prompt it, hire agents, upgrade your model and infra, and your real Claude Code work counts too. Think Idle Mine, but the ore is a backlog.
 
-![The bot hitting a task block: a new task, first cracks, a prompt landing, a crit, nearly cleared, cleared](docs/preview.svg)
+![The bot hitting tasks: an ore rock, a cracking crystal, a chip taking a hit, a bug taking a crit, nearly cleared, cleared](docs/preview.svg)
 
 ## How it plays
 
-- **The block is a task:** "Fix the flaky test", "Refactor auth", "Ship v2", "Achieve AGI"… Each has HP. The block cracks as it takes damage and changes color with every task.
+- **The block is a task:** "Fix the flaky test", "Refactor auth", "Ship v2", "Achieve AGI"… Each has HP and takes a shape in turn: an ore rock, a crystal, a chip, a bug. It cracks as it takes damage and changes color with every task.
 - **Prompt ⚡** hits it for your prompt power. 5% of hits are crits for ×10. Clear a task and it pays tokens ✦; the next one has more HP and pays more.
 - **Agents hit it for you**, every second, even while you type: Agents → Subagents → Robots → Agent swarms. Each one you buy costs a little more.
 - **Upgrades:**
@@ -20,7 +20,7 @@ A Claude-themed idle game that lives above your [Claude Code](https://claude.com
 - **Train a new model** (prestige): once you've earned 50K ✦ in a run, reset for a permanent point. Every point is +50% to prompts and agents, forever. Points scale with the square root of what you earned, so a 200K run is worth two.
 - **The band** above the prompt shows the task, its progress bar, your tokens, income per second and power per hit, with **Prompt ⚡**, **Shop** and **Hide** buttons. Once the band has focus (ctrl+x tab in the terminal), `p` prompts.
 - **`/idle`** opens the shop pane (and prints where you stand). While the pane has focus, the digit and letter on each button buy things: `1`–`4` agents, `m` model, `i` infra, `r` `e` `b` `g` `w` tools, `t` train, `p` prompt.
-- **Saved across sessions** every 15 seconds and after each turn. Toasts for upgrades, offline earnings and the odd bonus crit; turn them off with the Popups button in the shop.
+- **Saved across sessions** every 15 seconds and after each turn, play time included: the shop's Stats card shows how much you've gathered and how long you've played. Toasts for upgrades, offline earnings and the odd bonus crit; turn them off with the Popups button in the shop.
 
 In the Claude desktop app the scene is an SVG that animates itself (the bot's arm swings, the block shakes when a hit lands, damage numbers float up). In the terminal it's a cell grid of colored half blocks. Either way the mod only redraws when something changes, at most once a second.
 
