@@ -1,29 +1,29 @@
 # Token Tycoon 🤖
 
-A Claude-themed idle game that lives above your [Claude Code](https://claude.com/claude-code) prompt. A little coder in headphones works beside a task block; you prompt it, hire agents, upgrade your model and infra, and your real Claude Code work counts too. Think Idle Mine, but the ore is a backlog.
+A Claude-themed idle game that lives above your [Claude Code](https://claude.com/claude-code) prompt. A little coder in headphones sits beside a big token; every prompt earns tokens, agents earn them for you, the shop multiplies both, and your real Claude Code work counts too. Cookie Clicker, but the cookie is a token.
 
-![The mechanic and the tasks: an ore rock, a cracking crystal, a chip taking a hit, a bug taking a crit, nearly cleared, cleared](docs/preview.svg)
+![The coder and the token: idle, a prompt landing, a crit, a frenzy](docs/preview.svg)
 
 ## How it plays
 
-- **The block is a task:** "Fix the flaky test", "Refactor auth", "Ship v2", "Achieve AGI"… Each has HP and takes a shape in turn: an ore rock, a crystal, a chip, a bug. It cracks as it takes damage and changes color with every task.
-- **Prompt ⚡** hits it for your prompt power. 5% of hits are crits for ×10. Clear a task and it pays tokens ✦; the next one has more HP and pays more.
-- **Agents hit it for you**, every second, even while you type: Agents → Subagents → Robots → Agent swarms. Each one you buy costs 17% more, and owning 10, 25, 50, 100, 200 or 400 of a kind doubles that kind, every time.
-- **Sprints:** every ten tasks is a sprint. Task HP grows 33% per task, so each sprint needs the next tier of agents and upgrades to keep pace.
-- **Upgrades:**
-  - **Models** multiply your prompt power: Haiku ×1 → Sonnet ×3 → Opus ×10 → Fable ×30 → Mythos ×100.
-  - **Infra** multiplies your agents: Laptop → GPU ×2 → Rack ×4 → Data center ×8 → Cluster ×16.
-  - **Tools**, one-off: Read (agents +25%), Edit (prompts +50%), Bash (20% chance a prompt hits twice), Grep (crit chance 5% → 15%), WebSearch (offline earnings run twice as long).
-- **Your real work counts:**
-  - every tool call Claude makes is a free hit
-  - every finished turn is a guaranteed crit
-  - while you're away your agents keep working at half pace, up to 4 hours (8 with WebSearch), paid out when you come back
-- **Train a new model** (prestige): once you've earned 250K ✦ in a run, reset for a permanent point. Every point is +50% to prompts and agents, forever. Points scale with the square root of what you earned, so a 1M run is worth two.
-- **The band** above the prompt shows the task, its progress bar, your tokens, income per second and power per hit, with **Prompt ⚡** and **Shop 🛒** buttons and a faint *hide* in the corner. Once the band has focus (ctrl+x tab in the terminal), `p` prompts.
-- **`/idle`** opens the shop pane (and prints where you stand). While the pane has focus, the digit and letter on each button buy things: `1`–`4` agents, `m` model, `i` infra, `r` `e` `b` `g` `w` tools, `t` train, `p` prompt.
-- **Saved across sessions** every 15 seconds and after each turn, play time included: the shop's Stats card shows how much you've gathered and how long you've played. Toasts for upgrades, offline earnings and the odd bonus crit; turn them off with the Popups button in the shop.
+It's Cookie Clicker with Claude's furniture.
 
-In the Claude desktop app the scene is an SVG that animates itself. The coder has 14 frames (`docs/sheet.webp`, sliced by `docs/slice.py` and turned into SVG paths by `docs/vec.py`, which writes `hooks/frames.ts`) and reacts to what's going on: she types and thinks while Claude is working, blinks and looks around while idle, cheers when a task clears, catches fire on a crit, flinches on a prompt, slumps over the laptop when a tool call or turn fails, and falls asleep after five quiet minutes. The block shakes when a hit lands and damage numbers float up. In the terminal it's a cell grid of colored half blocks. Either way the mod only redraws when something changes, at most once a second.
+- **Prompt ⚡** earns tokens ✦. One per press to start; 5% of presses are crits for ×10.
+- **Agents earn tokens every second**, even while you type: Agent (0.1/sec) → Subagent (1) → Robot (8) → Agent swarm (47) → Model fleet (260) → Research lab (1,400). Each one you buy costs 15% more, and owning 10, 25, 50, 100, 200 or 400 of a kind doubles that kind, every time.
+- **Upgrades:**
+  - **Models** multiply what a prompt earns: Haiku ×1 → Sonnet ×2 → Opus ×5 → Fable ×20 → Mythos ×100.
+  - **Infra** multiplies your agents: Laptop → GPU ×2 → Rack ×4 → Data center ×8 → Cluster ×16.
+  - **Tools**, one-off: Read (agents +25%), Edit (each prompt also earns 5% of your per-second income), Bash (20% chance a prompt counts twice), Grep (crit chance 5% → 15%), WebSearch (earn while away for 8h instead of 4h).
+- **Your real work counts:**
+  - every tool call Claude makes is a free prompt
+  - every finished turn starts a **🔥 Frenzy**: all your agents earn ×7 for 30 seconds
+  - while you're away your agents keep earning at half pace, up to 4 hours (8 with WebSearch), paid out when you come back
+- **Train a new model** (prestige): once you've earned 500K ✦ in a run, reset for a permanent point. Every point is +25% to prompts and agents, forever. Points scale with the square root of what you earned, so a 2M run is worth two.
+- **The band** above the prompt shows your tokens, income per second and per prompt, a frenzy countdown when one is on, and a hint: what you can buy right now, or what you're saving for. **Prompt ⚡** bottom-left, **Shop 🛒** bottom-right, a faint *hide* in the corner. Once the band has focus (ctrl+x tab in the terminal), `p` prompts.
+- **`/idle`** opens the shop pane (and prints where you stand). Each shop button shows its hotkey; they work while the pane has focus.
+- **Saved across sessions** every 15 seconds and after each turn, play time included: the shop's Stats card shows how much you've gathered, how long you've played and how many frenzies you've had. Toasts for upgrades, milestones, frenzies and offline earnings; turn them off with the Popups button in the shop.
+
+In the Claude desktop app the scene is an SVG that animates itself. The coder has 14 frames (`docs/sheet.webp`, sliced by `docs/slice.py` and turned into SVG paths by `docs/vec.py`, which writes `hooks/frames.ts`) and reacts to what's going on: she types and thinks while Claude is working, blinks and looks around while idle, cheers at a frenzy or a milestone, catches fire on a crit, flinches on a prompt, slumps over the laptop when a tool call or turn fails, and falls asleep after five quiet minutes. The big token squashes when a press lands, glows orange during a frenzy, and the gain floats up. In the terminal it's a cell grid of colored half blocks with a small chibi. Either way the band only redraws when something changes, at most every few seconds.
 
 ## Install
 
@@ -76,7 +76,7 @@ Write the full path. Older versions don't expand `~` here, so `~/.claude/mods/to
 
 ## Tuning
 
-All the numbers live at the top of [`hooks/register.tsx`](hooks/register.tsx): the task names (`TASKS`), the agents (`GENS`), the model and infra tiers (`MODELS`, `INFRA`), the tools (`TOOLS`), task HP and rewards (`taskHp`, `taskReward`, 33% more HP per task), the crit multiplier, the agent milestones (`MILESTONES`) and how many tokens a prestige point costs (`POINT_EVERY`). The sprites are letter grids just below: four 24×18 task shapes at 2 CSS pixels per cell, and a 16×18 chibi for the terminal. The desktop coder is a sprite sheet: replace `docs/sheet.webp` with your own 7×2 grid of transparent frames and run `python3 docs/slice.py docs/sheet.webp /tmp/frames /tmp/unused.ts` then `SIZE=128 python3 docs/slice.py ... then python3 docs/vec.py /tmp/frames 128 24 hooks/frames.ts /tmp/check.svg` (needs Pillow). Frame order: idle, eyes closed, look up, blink, typing, thinking, sleep 1, sleep 2, oops, cheer 1, cheer 2, overclocked 1, overclocked 2, hit.
+All the numbers live at the top of [`hooks/register.tsx`](hooks/register.tsx): the agents (`GENS`), the model and infra tiers (`MODELS`, `INFRA`), the tools (`TOOLS`), the crit multiplier, the frenzy multiplier and length, the agent milestones (`MILESTONES`) and how many tokens a prestige point costs (`POINT_EVERY`). The sprites are letter grids just below: a 20×18 token and a 16×18 chibi for the terminal. The desktop coder is a sprite sheet: replace `docs/sheet.webp` with your own 7×2 grid of transparent frames and run `python3 docs/slice.py docs/sheet.webp /tmp/frames /tmp/unused.ts` then `SIZE=128 python3 docs/slice.py ... then python3 docs/vec.py /tmp/frames 128 24 hooks/frames.ts /tmp/check.svg` (needs Pillow). Frame order: idle, eyes closed, look up, blink, typing, thinking, sleep 1, sleep 2, oops, cheer 1, cheer 2, overclocked 1, overclocked 2, hit.
 
 Check your changes with:
 

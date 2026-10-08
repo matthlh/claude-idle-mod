@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Fx, GenId, Mood, Prefs, Save, ToolId } from '../types'
+import type { Fx, FxKind, GenId, Mood, Prefs, Save, ToolId } from '../types'
 import { FRAMES, FRAME_SIZE } from './frames'
 
 // ── State ────────────────────────────────────────────────────────────────
@@ -12,72 +12,48 @@ export const FRESH: Save = {
   tokens: 0,
   earned: 0,
   lifetime: 0,
-  level: 0,
-  hp: 10,
   clicks: 0,
-  cleared: 0,
-  owned: { agent: 0, subagent: 0, robot: 0, swarm: 0 },
+  owned: { agent: 0, subagent: 0, robot: 0, swarm: 0, fleet: 0, lab: 0 },
   model: 0,
   infra: 0,
   tools: { read: false, edit: false, bash: false, grep: false, web: false },
   points: 0,
   trained: 0,
   bonusHits: 0,
+  frenzies: 0,
+  frenzyUntil: 0,
   played: 0,
   savedAt: 0,
 }
 
 export const save = atom({ plugin: 'token-tycoon', key: 'save' } as const, { ...FRESH } as Save)
-export const fx = atom({ plugin: 'token-tycoon', key: 'fx' } as const, { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 } as Fx)
+export const fx = atom({ plugin: 'token-tycoon', key: 'fx' } as const, { at: 0, gain: 0, kind: null } as Fx)
 const isHidden = atom({ plugin: 'token-tycoon', key: 'isHidden' } as const, false)
 const prefs = atom({ plugin: 'token-tycoon', key: 'prefs' } as const, { popups: true } as Prefs)
 // What the character is doing, set by the hooks; frames follow from it and fx.
 const mood = atom({ plugin: 'token-tycoon', key: 'mood' } as const, 'idle' as Mood)
 
 // ── The game ─────────────────────────────────────────────────────────────
+// Cookie Clicker with Claude's furniture: a prompt earns tokens, agents earn
+// tokens every second, and the shop multiplies both.
 
-export const TASKS = [
-  'Fix a typo',
-  'Fix the flaky test',
-  'Add unit tests',
-  'Update the README',
-  'Rename a variable',
-  'Refactor auth',
-  'Fix the N+1 query',
-  'Resolve merge conflicts',
-  'Upgrade dependencies',
-  'Add dark mode',
-  'Migrate the database',
-  'Write the API docs',
-  'Delete node_modules',
-  'Debug prod at 3am',
-  'Ship v2',
-  'Rewrite it in Rust',
-  'Fix the CSS',
-  'Make the tests pass',
-  'Add a cache',
-  'Remove the cache',
-  'Scale to 1M users',
-  'Pass the security audit',
-  'Train a bigger model',
-  'Achieve AGI',
-]
-
-export type Gen = { id: GenId; label: string; dps: number; cost: number; hotkey: string }
+export type Gen = { id: GenId; label: string; rate: number; cost: number; hotkey: string }
 export const GENS: Gen[] = [
-  { id: 'agent', label: 'Agent', dps: 0.4, cost: 20, hotkey: '1' },
-  { id: 'subagent', label: 'Subagent', dps: 4, cost: 250, hotkey: '2' },
-  { id: 'robot', label: 'Robot', dps: 30, cost: 3500, hotkey: '3' },
-  { id: 'swarm', label: 'Agent swarm', dps: 250, cost: 50000, hotkey: '4' },
+  { id: 'agent', label: 'Agent', rate: 0.1, cost: 15, hotkey: '1' },
+  { id: 'subagent', label: 'Subagent', rate: 1, cost: 100, hotkey: '2' },
+  { id: 'robot', label: 'Robot', rate: 8, cost: 1100, hotkey: '3' },
+  { id: 'swarm', label: 'Agent swarm', rate: 47, cost: 12000, hotkey: '4' },
+  { id: 'fleet', label: 'Model fleet', rate: 260, cost: 130000, hotkey: '5' },
+  { id: 'lab', label: 'Research lab', rate: 1400, cost: 1400000, hotkey: '6' },
 ]
 
 export type Tier = { label: string; mult: number; cost: number }
 export const MODELS: Tier[] = [
   { label: 'Haiku', mult: 1, cost: 0 },
-  { label: 'Sonnet', mult: 3, cost: 100 },
-  { label: 'Opus', mult: 10, cost: 2000 },
-  { label: 'Fable', mult: 30, cost: 40000 },
-  { label: 'Mythos', mult: 100, cost: 800000 },
+  { label: 'Sonnet', mult: 2, cost: 100 },
+  { label: 'Opus', mult: 5, cost: 1000 },
+  { label: 'Fable', mult: 20, cost: 20000 },
+  { label: 'Mythos', mult: 100, cost: 500000 },
 ]
 export const INFRA: Tier[] = [
   { label: 'Laptop', mult: 1, cost: 0 },
@@ -90,10 +66,10 @@ export const INFRA: Tier[] = [
 export type Tool = { id: ToolId; label: string; cost: number; desc: string; hotkey: string }
 export const TOOLS: Tool[] = [
   { id: 'read', label: 'Read', cost: 200, desc: 'agents +25%', hotkey: 'r' },
-  { id: 'edit', label: 'Edit', cost: 900, desc: 'prompts +50%', hotkey: 'e' },
-  { id: 'bash', label: 'Bash', cost: 5000, desc: '20% double hit', hotkey: 'b' },
-  { id: 'grep', label: 'Grep', cost: 20000, desc: 'crit 5% → 15%', hotkey: 'g' },
-  { id: 'web', label: 'WebSearch', cost: 80000, desc: 'offline 2× longer', hotkey: 'w' },
+  { id: 'edit', label: 'Edit', cost: 900, desc: 'each prompt also earns 5% of your per-second income', hotkey: 'e' },
+  { id: 'bash', label: 'Bash', cost: 5000, desc: '20% chance a prompt counts twice', hotkey: 'b' },
+  { id: 'grep', label: 'Grep', cost: 20000, desc: 'crit chance 5% → 15%', hotkey: 'g' },
+  { id: 'web', label: 'WebSearch', cost: 80000, desc: 'earn while away for 8h instead of 4h', hotkey: 'w' },
 ]
 
 export function modelAt(i: number): Tier {
@@ -104,35 +80,19 @@ export function infraAt(i: number): Tier {
 }
 
 export const CRIT_MULT = 10
-export const POINT_EVERY = 250000
+export const POINT_EVERY = 500000
 // Owning this many of one agent doubles that agent, each time.
 export const MILESTONES = [10, 25, 50, 100, 200, 400]
-export const SPRINT = 10
+export const FRENZY_MULT = 7
+export const FRENZY_MS = 30_000
 export const OFFLINE_RATE = 0.5
 export const OFFLINE_CAP_H = 4
 
-export function taskName(level: number): string {
-  const n = TASKS.length
-  const round = Math.floor(level / n)
-  return (TASKS[level % n] ?? '') + (round > 0 ? ` v${round + 1}` : '')
-}
-export function taskHp(level: number): number {
-  return Math.floor(10 * Math.pow(1.33, level))
-}
-export function taskReward(level: number): number {
-  return Math.floor(4 + taskHp(level) * 0.45)
-}
 export function prestigeMult(points: number): number {
-  return 1 + 0.5 * points
+  return 1 + 0.25 * points
 }
 export function pointsFor(earned: number): number {
   return Math.floor(Math.sqrt(earned / POINT_EVERY))
-}
-export function power(s: Save): number {
-  return modelAt(s.model).mult * (s.tools.edit ? 1.5 : 1) * prestigeMult(s.points)
-}
-export function critChance(s: Save): number {
-  return s.tools.grep ? 0.15 : 0.05
 }
 export function milestoneMult(owned: number): number {
   return Math.pow(2, MILESTONES.filter(n => owned >= n).length)
@@ -140,22 +100,54 @@ export function milestoneMult(owned: number): number {
 export function nextMilestone(owned: number): number | null {
   return MILESTONES.find(n => owned < n) ?? null
 }
-export function genDps(s: Save, g: Gen): number {
-  const n = s.owned[g.id] ?? 0
-  return g.dps * milestoneMult(n) * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
+export function isFrenzy(s: Save, now: number): boolean {
+  return now < (s.frenzyUntil ?? 0)
 }
-export function sprintOf(level: number): number {
-  return Math.floor(level / SPRINT) + 1
+// What one of this agent earns per second, with every multiplier but frenzy.
+export function genRate(s: Save, g: Gen): number {
+  return g.rate * milestoneMult(s.owned[g.id] ?? 0) * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
 }
-export function dps(s: Save): number {
-  const raw = GENS.reduce((sum, g) => sum + g.dps * milestoneMult(s.owned[g.id] ?? 0) * (s.owned[g.id] ?? 0), 0)
-  return raw * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
+export function baseDps(s: Save): number {
+  return GENS.reduce((sum, g) => sum + genRate(s, g) * (s.owned[g.id] ?? 0), 0)
+}
+export function dps(s: Save, now = 0): number {
+  return baseDps(s) * (isFrenzy(s, now) ? FRENZY_MULT : 1)
+}
+export function clickGain(s: Save): number {
+  return (modelAt(s.model).mult + (s.tools.edit ? 0.05 * baseDps(s) : 0)) * prestigeMult(s.points)
+}
+export function critChance(s: Save): number {
+  return s.tools.grep ? 0.15 : 0.05
 }
 export function genCost(g: Gen, owned: number): number {
-  return Math.ceil(g.cost * Math.pow(1.17, owned))
+  return Math.ceil(g.cost * Math.pow(1.15, owned))
 }
 export function offlineCapMs(s: Save): number {
   return OFFLINE_CAP_H * (s.tools.web ? 2 : 1) * 3600_000
+}
+export function nextTier(list: Tier[], at: number): Tier | null {
+  return at + 1 < list.length ? (list[at + 1] as Tier) : null
+}
+// The cheapest thing in the shop you can't afford yet: what to save for.
+export function savingFor(s: Save): { label: string; cost: number } | null {
+  const items: { label: string; cost: number }[] = GENS.map(g => ({ label: g.label, cost: genCost(g, s.owned[g.id] ?? 0) }))
+  const m = nextTier(MODELS, s.model)
+  if (m) items.push({ label: `Model → ${m.label}`, cost: m.cost })
+  const i = nextTier(INFRA, s.infra)
+  if (i) items.push({ label: `Infra → ${i.label}`, cost: i.cost })
+  for (const t of TOOLS) if (!s.tools[t.id]) items.push({ label: t.label, cost: t.cost })
+  const ahead = items.filter(x => x.cost > s.tokens).sort((a, b) => a.cost - b.cost)
+  return ahead[0] ?? null
+}
+export function canBuy(s: Save): { label: string; cost: number } | null {
+  const items: { label: string; cost: number }[] = GENS.map(g => ({ label: g.label, cost: genCost(g, s.owned[g.id] ?? 0) }))
+  const m = nextTier(MODELS, s.model)
+  if (m) items.push({ label: `Model → ${m.label}`, cost: m.cost })
+  const i = nextTier(INFRA, s.infra)
+  if (i) items.push({ label: `Infra → ${i.label}`, cost: i.cost })
+  for (const t of TOOLS) if (!s.tools[t.id]) items.push({ label: t.label, cost: t.cost })
+  const ok = items.filter(x => x.cost <= s.tokens).sort((a, b) => b.cost - a.cost)
+  return ok[0] ?? null
 }
 
 export function fmt(n: number): string {
@@ -173,41 +165,22 @@ export function fmt(n: number): string {
   const digits = v < 10 ? 2 : v < 100 ? 1 : 0
   return (n < 0 ? '-' : '') + v.toFixed(digits) + units[i]
 }
-
-// Deals damage to the current task, rolling over into the next ones.
-export function damage(s: Save, amount: number): { s: Save; cleared: number; reward: number; last: string | null } {
-  let hp = s.hp - amount
-  let level = s.level
-  let tokens = s.tokens
-  let earned = s.earned
-  let lifetime = s.lifetime
-  let cleared = 0
-  let reward = 0
-  let last: string | null = null
-  while (hp <= 0 && cleared < 5000) {
-    const r = taskReward(level)
-    tokens += r
-    earned += r
-    lifetime += r
-    reward += r
-    last = taskName(level)
-    cleared++
-    level++
-    hp += taskHp(level)
-  }
-  if (hp <= 0) hp = taskHp(level)
-  return { s: { ...s, hp, level, tokens, earned, lifetime, cleared: s.cleared + cleared }, cleared, reward, last }
+export function fmtTime(ms: number): string {
+  const m = Math.floor(ms / 60_000)
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `${h}h ${m % 60}m`
+  return `${Math.floor(h / 24)}d ${h % 24}h`
 }
-
-export function nextTier(list: Tier[], at: number): Tier | null {
-  return at + 1 < list.length ? (list[at + 1] as Tier) : null
+// Adds tokens: to the purse, this run's total and the lifetime total.
+export function earn(s: Save, amount: number): Save {
+  return { ...s, tokens: s.tokens + amount, earned: s.earned + amount, lifetime: s.lifetime + amount }
 }
 
 // ── Art ──────────────────────────────────────────────────────────────────
-// Letter grids: '.' is transparent. The bot has two frames; the block cracks
-// as its HP drops and changes color with each task.
+// Letter grids: '.' is transparent. The terminal shows a chibi beside a big
+// token; the desktop shows the sprite-sheet coder (frames.ts) beside it.
 
-// A chibi mechanic in a Claude hoodie: frame B swings a wrench.
 const BOT_A = [
   '....hhhhhhhh....',
   '...hhhhhhhhhh...',
@@ -248,140 +221,38 @@ const BOT_B = [
   '.....pp..pp.....',
   '....bbb..bbb....',
 ]
-// Four shapes, one per task in turn: an ore rock, a crystal, a chip, a bug.
-// F face, L lit edge, D dark edge, H highlight, X texture.
-const SHAPES: string[][] = [
-  [
-    '........LLLLLLLL........',
-    '.....LLLFFFFFFFFLL......',
-    '...LLFFHHFFFFFFFFFLL....',
-    '..LFFHHFFFFXXFFFFFFFD...',
-    '.LFFHFFFFFFFFFFFFFFFFD..',
-    '.LFFFFFFXXFFFFFFFXXFFD..',
-    'LFFFFFFFXXFFFFFFFFFFFFD.',
-    'LFFXXFFFFFFFFFFFFFFFFDD.',
-    'LFFXXFFFFFFFXXFFFFFFDDD.',
-    'LFFFFFFFFFFFXXFFFFFDDDD.',
-    'LFFFFFFXXFFFFFFFFFDDDDD.',
-    '.DFFFFFXXFFFFFFXXFDDDDD.',
-    '.DFFFFFFFFFFFFFXXDDDDDD.',
-    '..DFFFFFFFXXFFFFDDDDDD..',
-    '...DDFFFFFXXFFDDDDDDD...',
-    '....DDDFFFFFDDDDDDD.....',
-    '......DDDDDDDDDDD.......',
-    '........DDDDDDD.........',
-  ],
-  [
-    '..........LLLL..........',
-    '.........LHHHHL.........',
-    '........LHHHFFFL........',
-    '.......LHHFFFFFFL.......',
-    '......LHHFFFFFFFFL......',
-    '.....LHFFFFFXFFFFFD.....',
-    '....LHFFFFFFXXFFFFFD....',
-    '...LHFFFFFFFFFFFFFFFD...',
-    '..LFFFFFXXFFFFFFFFFFFD..',
-    '.LFFFFFFXXFFFFFFFXFFFFD.',
-    'LFFFFFFFFFFFFFFFFXXFFFFD',
-    '.DFFFFFFFFFFXXFFFFFFFFD.',
-    '..DFFFFFFFFFXXFFFFFFFD..',
-    '...DFFFFFFFFFFFFFFFFD...',
-    '....DFFFFFXXFFFFFFFD....',
-    '.....DFFFFXXFFFFFFD.....',
-    '......DDFFFFFFFFDD......',
-    '........DDDDDDDD........',
-  ],
-  [
-    '..D..D..D..D..D..D..D...',
-    '..D..D..D..D..D..D..D...',
-    'LLLLLLLLLLLLLLLLLLLLLL..',
-    'LFFFFFFFFFFFFFFFFFFFFD..',
-    'LFFXXFFFFXXFFFFXXFFFFD..',
-    'LFFXXFFFFXXFFFFXXFFFFD..',
-    'LFFFFFFFFFFFFFFFFFFFFD..',
-    'LFFFFFHHHHHHHHHHFFFFFD..',
-    'LFFXXFHFFFFFFFFHFXXFFD..',
-    'LFFXXFHFFFFFFFFHFXXFFD..',
-    'LFFFFFHHHHHHHHHHFFFFFD..',
-    'LFFFFFFFFFFFFFFFFFFFFD..',
-    'LFFXXFFFFXXFFFFXXFFFFD..',
-    'LFFXXFFFFXXFFFFXXFFFFD..',
-    'LFFFFFFFFFFFFFFFFFFFFD..',
-    'DDDDDDDDDDDDDDDDDDDDDD..',
-    '..D..D..D..D..D..D..D...',
-    '..D..D..D..D..D..D..D...',
-  ],
-  [
-    '....L..............L....',
-    '.....L............L.....',
-    '......D..........D......',
-    '.......LLLLLLLLLL.......',
-    '......LLHHFFFFFFLL......',
-    '.....LFHHFFFFFFFFFD.....',
-    '....LFFFFFFXXFFFFFFD....',
-    '...LFFFFFFFXXFFFFFFFD...',
-    '..LFFFFFXXFFFFXXFFFFFD..',
-    '..LFFFFFXXFFFFXXFFFFFD..',
-    '.LFFFFFFFFFXXFFFFFFFFFD.',
-    '.LFFFFFFFFFXXFFFFFFFFFD.',
-    '..DFFFFFXXFFFFXXFFFFFD..',
-    '..DFFFFFXXFFFFXXFFFFD...',
-    '...DFFFFFFFFFFFFFFFD....',
-    '....DDFFFFFFFFFFFDD.....',
-    '......DDDDDDDDDDD.......',
-    '...D....D....D....D.....',
-  ],
-]
-// Crack pixels [x, y] added at each stage of damage.
-const CRACKS: [number, number][][] = [
-  [[11, 2], [11, 3], [12, 4], [12, 5], [13, 6]],
-  [[13, 7], [14, 8], [13, 9], [8, 5], [7, 6], [6, 7]],
-  [[14, 10], [15, 11], [16, 12], [5, 8], [4, 9], [9, 10], [10, 11], [10, 12], [19, 5], [19, 6]],
-  [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
+// The big token: a gold coin with a ✦ on it.
+const COIN = [
+  '......LLLLLLLL......',
+  '....LLHHHHHHHHLL....',
+  '...LHHHFFFFFFHHHL...',
+  '..LHHFFFFFFFFFFHHL..',
+  '.LHHFFFFFWWFFFFFHHL.',
+  '.LHFFFFFFWWFFFFFFHL.',
+  'LHHFFFFFWWWWFFFFFHHD',
+  'LHFFFFWWWWWWWWFFFFHD',
+  'LHFFFFFFWWWWFFFFFFHD',
+  'LHFFFFFFFWWFFFFFFFHD',
+  'LHFFFFFFFWWFFFFFFFDD',
+  'LHFFFFFFFFFFFFFFFDDD',
+  '.LHFFFFFFFFFFFFFDDD.',
+  '.LHFFFFFFFFFFFFDDDD.',
+  '..LFFFFFFFFFFFDDDD..',
+  '...LFFFFFFFFFDDDD...',
+  '....LLFFFFFDDDD.....',
+  '......DDDDDDDD......',
 ]
 export type Palette = Record<string, number>
-export const CHAR_PX = 84
-export const PORTRAIT_W = CHAR_PX
-export const PORTRAIT_H = CHAR_PX
-
 const BOT_PAL: Palette = { h: 0x5a3b2e, f: 0xf6d2b3, n: 0xdcb18f, E: 0x3fb8f0, e: 0xffffff, V: 0xb0555b, o: 0xd97757, s: 0xa8553a, c: 0xf4ece2, w: 0xf6d2b3, p: 0x3c4a7a, b: 0x2b2b30, T: 0xffd54a }
-// One block color per task, cycling: [face, light, dark].
-const BLOCK_COLORS: [number, number, number][] = [
-  [0xd97757, 0xf0a284, 0x9a4d33], // Claude orange
-  [0x5b8def, 0x8fb3ff, 0x3457a8], // blue
-  [0x5cb85c, 0x8fe08f, 0x357a35], // green
-  [0xa06cd5, 0xc79cf2, 0x6a3f99], // purple
-  [0xe05a5a, 0xf59090, 0x9c3434], // red
-  [0xe0b43c, 0xf5d57a, 0x9c7a1f], // gold
-]
+const COIN_PAL: Palette = { L: 0xfff3b0, H: 0xffe066, F: 0xf5c542, W: 0xfffbe8, D: 0xb8860b }
+const FRENZY_PAL: Palette = { L: 0xffd0a0, H: 0xffa54a, F: 0xf58a2a, W: 0xfff4d6, D: 0xb35a10 }
 const SPARK = 0xffe66d
-const CRACK = 0x2b2622
-
-export function crackStage(hp: number, max: number): number {
-  const lost = 1 - hp / Math.max(1, max)
-  return lost >= 0.8 ? 4 : lost >= 0.6 ? 3 : lost >= 0.4 ? 2 : lost >= 0.2 ? 1 : 0
-}
-
-function blockRows(level: number, stage: number): string[] {
-  const shape = SHAPES[level % SHAPES.length] ?? SHAPES[0]!
-  const rows = shape.map(r => r.split(''))
-  for (let i = 0; i < stage; i++)
-    for (const [x, y] of CRACKS[i] ?? []) {
-      const row = rows[y]
-      if (row && row[x] !== undefined && row[x] !== '.') row[x] = 'C'
-    }
-  return rows.map(r => r.join(''))
-}
-
-function blockPal(level: number): Palette {
-  const [F, L, D] = BLOCK_COLORS[level % BLOCK_COLORS.length] ?? [0xd97757, 0xf0a284, 0x9a4d33]
-  return { F, L, D, C: CRACK, H: mix(L, 0xffffff, 0.45), X: mix(F, D, 0.55) }
-}
 
 export const SCENE_W = 56
 export const SCENE_H = 28
 const BOT_X = 3
-const BLOCK_X = 30
+const COIN_X = 31
+const COIN_Y = 5
 const PX = 3
 
 type Pixels = (number | undefined)[]
@@ -396,31 +267,30 @@ function plot(pixels: Pixels, rows: string[], x0: number, y0: number, pal: Palet
   })
 }
 
-// The scene as pixels: the bot, the block, and a spark while a hit lands.
+// The scene as pixels: the chibi, the coin, and sparks while a press lands.
 export function scenePixels(s: Save, f: Fx, now: number, frame: 0 | 1): Pixels {
   const pixels: Pixels = new Array(SCENE_W * SCENE_H)
-  const hitting = now - f.at < 400
+  const hitting = now - f.at < 400 && (f.kind === 'click' || f.kind === 'free' || f.kind === 'crit')
   plot(pixels, frame ? BOT_B : BOT_A, BOT_X, 5, BOT_PAL)
-  plot(pixels, blockRows(s.level, crackStage(s.hp, taskHp(s.level))), BLOCK_X, 5, blockPal(s.level))
-  if (hitting) {
+  plot(pixels, COIN, COIN_X, COIN_Y, isFrenzy(s, now) ? FRENZY_PAL : COIN_PAL)
+  if (hitting || isFrenzy(s, now)) {
     const sp = { S: SPARK }
-    plot(pixels, ['SS..', '.SS.', '..SS', '.SS.', 'SS..'], BLOCK_X - 6, 9, sp)
-    if (f.isCrit) plot(pixels, ['..SS', '.SS.', 'SS..', '.SS.', '..SS'], BLOCK_X - 8, 15, sp)
+    plot(pixels, ['S...', '.S..', '..S.', '.S..', 'S...'], COIN_X - 5, 8, sp)
+    plot(pixels, ['...S', '..S.', '.S..', '..S.', '...S'], COIN_X + 21, 8, sp)
+    if (f.kind === 'crit' && hitting) plot(pixels, ['S.S', '.S.', 'S.S'], COIN_X + 8, 1, sp)
   }
   return pixels
 }
 
-// Blends two 0xRRGGBB colors, t of the way from a to b.
-function mix(a: number, b: number, t: number): number {
-  const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t)
-  return (ch(16) << 16) | (ch(8) << 8) | ch(0)
-}
-
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 
-// The desktop scene is two SVGs side by side: the bot, whose source never
-// changes (so its animation never restarts), and the block, redrawn on hits.
+// ── Desktop: two SVGs side by side ──
+// The coder (frames.ts) never changes with the score, so her animation keeps
+// running; the coin redraws when a press lands.
 export const SPLIT_X = 22
+export const CHAR_PX = 84
+export const PORTRAIT_W = CHAR_PX
+export const PORTRAIT_H = CHAR_PX
 const BOT_W = PORTRAIT_W
 const BLOCK_W = (SCENE_W - SPLIT_X) * PX
 const SCENE_PX_H = SCENE_H * PX
@@ -438,7 +308,7 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
 const CARD = '#1e1e1e'
 const svgOpen = (w: number) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" style="background:${CARD}"><rect width="100%" height="100%" fill="${CARD}"/>`
-// Horizontal runs of one color become one rect, which keeps the source small.
+
 // Each state is one steady base frame, with other frames shown only during
 // short slots of a cycle (a blink, a glance up), plus a smooth motion on top.
 const F = { idle: 0, eyesClosed: 1, lookUp: 2, blink: 3, typing: 4, thinking: 5, sleep1: 6, sleep2: 7, oops: 8, cheer1: 9, cheer2: 10, over1: 11, over2: 12, hit: 13 }
@@ -451,11 +321,12 @@ const bob = (px: number, dur: number, squash = 0.02) =>
 const shake = (px: number, dur: number) =>
   `<animateTransform attributeName="transform" type="translate" values="0 0;${px} 0;0 0;${-px} 0;0 0" dur="${dur}s" repeatCount="indefinite"/>`
 function sceneFor(md: Mood, f: Fx, now: number): Scene {
-  if (now - f.at < 500 && f.dmg > 0 && !f.isCrit)
+  const age = now - f.at
+  if (age < 500 && (f.kind === 'click' || f.kind === 'free'))
     return { base: F.hit, cycle: 1, extras: [], motion: `<animateTransform attributeName="transform" type="scale" values="1 1;1.08 0.9;0.97 1.04;1 1" dur="0.35s" repeatCount="1"/>` }
-  if (now - f.at < 1200 && f.isCrit)
+  if (age < 1200 && f.kind === 'crit')
     return { base: F.over1, cycle: 0.4, extras: [{ frame: F.over2, slots: [[0.5, 1]] }], motion: shake(1, 0.16) }
-  if (f.cleared && now - f.at < 1500)
+  if (age < 1500 && (f.kind === 'frenzy' || f.kind === 'buy' || f.kind === 'offline'))
     return { base: F.cheer1, cycle: 0.7, extras: [{ frame: F.cheer2, slots: [[0.5, 1]] }], motion: bob(5, 0.35, 0.06) }
   if (md === 'working')
     return { base: F.typing, cycle: 6, extras: [{ frame: F.thinking, slots: [[0.55, 0.8]] }], motion: bob(1.5, 0.8, 0.025) }
@@ -498,23 +369,30 @@ function botBodyFor(md: Mood, f: Fx, now: number, dx: number): string {
 }
 // The docs and the tests still get a frame without a mood.
 function botBody(dx: number): string {
-  return botBodyFor('idle', { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }, 1e9, dx)
+  return botBodyFor('idle', { at: 0, gain: 0, kind: null }, 1e9, dx)
 }
 
+// The coin half: squashes when a press lands, with the gain floating up.
 function blockBody(s: Save, f: Fx, now: number, dx: number): string {
-  const hitting = now - f.at < 400
-  const justCleared = f.cleared && now - f.at < 1500
+  const age = now - f.at
+  const pressed = age < 400 && (f.kind === 'click' || f.kind === 'free' || f.kind === 'crit')
   const pix = scenePixels(s, f, now, 0)
-  const shake = hitting
-    ? `<animateTransform attributeName="transform" type="translate" values="0 0;${f.isCrit ? 3 : 2} 0;-1 0;0 0" dur="0.25s" begin="0s" repeatCount="1"/>`
-    : ''
-  const tx = (BLOCK_X + 5 - dx) * PX
+  const cx = (COIN_X + 10 - dx) * PX
+  const cy = (COIN_Y + 9) * PX
+  const squash = pressed
+    ? `<animateTransform attributeName="transform" type="scale" values="1 1;${f.kind === 'crit' ? '1.18 0.8' : '1.1 0.88'};0.96 1.05;1 1" dur="0.3s" begin="0s" repeatCount="1"/>`
+    : isFrenzy(s, now)
+      ? `<animateTransform attributeName="transform" type="scale" values="1 1;1.05 1.05;1 1" dur="0.5s" repeatCount="indefinite"/>`
+      : `<animateTransform attributeName="transform" type="scale" values="1 1;1.02 1.02;1 1" dur="2.4s" repeatCount="indefinite"/>`
   const float = (text: string, fill: string, dur: string) =>
-    `<text x="${tx}" y="${9 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="${fill}" stroke="#000" stroke-width="2" paint-order="stroke">${text}<animate attributeName="y" from="${9 * PX}" to="${5 * PX}" dur="${dur}" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="${dur}" begin="0s" fill="freeze"/></text>`
-  const pop = hitting
-    ? float(`-${fmt(f.dmg)}${f.isCrit ? '!' : ''}`, f.isCrit ? '#ffe66d' : '#ffffff', '0.9s')
-    : justCleared ? float(`+${fmt(f.reward)}`, '#8fe08f', '1.4s') : ''
-  return `<g>${rects(pix, SPLIT_X, SCENE_W, dx)}${shake}</g>${pop}`
+    `<text x="${cx}" y="${9 * PX}" font-family="monospace" font-size="12" font-weight="bold" text-anchor="middle" fill="${fill}" stroke="#000" stroke-width="2" paint-order="stroke">${text}<animate attributeName="y" from="${9 * PX}" to="${4 * PX}" dur="${dur}" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="${dur}" begin="0s" fill="freeze"/></text>`
+  const pop =
+    age < 1200 && f.gain > 0 && (f.kind === 'click' || f.kind === 'free' || f.kind === 'crit')
+      ? float(`+${fmt(f.gain)}${f.kind === 'crit' ? '!' : ''}`, f.kind === 'crit' ? '#ffe66d' : '#ffffff', '0.9s')
+      : age < 2000 && f.gain > 0 && (f.kind === 'offline' || f.kind === 'frenzy')
+        ? float(f.kind === 'frenzy' ? '×7!' : `+${fmt(f.gain)}`, '#8fe08f', '1.6s')
+        : ''
+  return `<g transform-origin="${cx} ${cy}" style="transform-origin:${cx}px ${cy}px">${rects(pix, SPLIT_X, SCENE_W, dx)}${squash}</g>${pop}`
 }
 
 export function botSvg(md: Mood = 'idle', f?: Fx, now = 0): string {
@@ -529,7 +407,7 @@ export function sceneSvg(s: Save, f: Fx, now: number): string {
   return svgOpen(PORTRAIT_W + BLOCK_W) + botBody(0) + `<g transform="translate(${PORTRAIT_W},0)">` + blockBody(s, f, now, SPLIT_X) + '</g></svg>'
 }
 
-// Terminal: the scene as a Raster of half blocks, two pixels per cell.
+// ── Terminal: the scene as a Raster of half blocks ──
 const DEFAULT = 0x01000000
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 function base64(bytes: Uint8Array): string {
@@ -543,9 +421,7 @@ function base64(bytes: Uint8Array): string {
   }
   return out
 }
-
-// The terminal gets the scene at half size: each cell holds a 2×2 block of
-// pixels on top and another below, so the band stays five rows tall.
+// The terminal gets the scene at half width and five rows tall.
 export const CELL_W = SCENE_W / 2
 export const SCENE_ROWS = 5
 export function sceneCells(s: Save, f: Fx, now: number): string {
@@ -576,11 +452,6 @@ export function sceneCells(s: Save, f: Fx, now: number): string {
   return base64(new Uint8Array(grid.buffer))
 }
 
-export function bar(frac: number, width: number): string {
-  const n = Math.round(Math.max(0, Math.min(1, frac)) * width)
-  return '█'.repeat(n) + '░'.repeat(width - n)
-}
-
 // ── Helpers that take the engine ─────────────────────────────────────────
 // Top-level declarations so a press never depends on one drawing's closure.
 
@@ -589,8 +460,14 @@ function ignorePress() {}
 let dirty = false
 let lastActivity = 0
 let oopsUntil = 0
+// Seconds played and income not yet written to the state (see the tick).
+let playedAcc = 0
+let pending = 0
 const SLEEP_AFTER_MS = 5 * 60_000
 
+async function toast($: EngineInterface, text: string) {
+  if ((await read($, prefs)).popups) $.ui.toast(text)
+}
 async function setMood($: EngineInterface, md: Mood) {
   if ((await read($, mood)) !== md) await update($, mood, () => md)
 }
@@ -598,58 +475,47 @@ async function touch($: EngineInterface, md: Mood) {
   lastActivity = await $.clock.now()
   await setMood($, md)
 }
-// Seconds played since the last save, folded in by persist.
-let playedAcc = 0
-// Passive damage not yet written to the state (see the tick).
-let pending = 0
-
-export function fmtTime(ms: number): string {
-  const m = Math.floor(ms / 60_000)
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 48) return `${h}h ${m % 60}m`
-  return `${Math.floor(h / 24)}d ${h % 24}h`
-}
-
-async function toast($: EngineInterface, text: string) {
-  if ((await read($, prefs)).popups) $.ui.toast(text)
-}
-
 async function commit($: EngineInterface, s: Save) {
   await update($, save, () => s)
   dirty = true
 }
-
 async function persist($: EngineInterface) {
   const s = await read($, save)
-  const stamped = { ...s, played: (s.played ?? 0) + playedAcc, savedAt: await $.clock.now() }
+  const stamped = { ...earn(s, pending), played: (s.played ?? 0) + playedAcc, savedAt: await $.clock.now() }
+  pending = 0
   playedAcc = 0
   await update($, save, () => stamped)
   await $.store.set('save', stamped)
   dirty = false
 }
+async function flash($: EngineInterface, kind: FxKind, gain: number) {
+  const at = await $.clock.now()
+  await update($, fx, () => ({ at, gain, kind }))
+}
 
-// One prompt hit: from the button, a real tool call (free) or a finished turn (crit).
-async function hit($: EngineInterface, kind: 'click' | 'tool' | 'turn') {
+// One prompt: from the button, or free from a real tool call.
+async function prompt($: EngineInterface, kind: 'click' | 'free') {
   const s0 = await read($, save)
-  const now = await $.clock.now()
-  const isCrit = kind === 'turn' || Math.random() < critChance(s0)
+  const isCrit = Math.random() < critChance(s0)
   const twice = s0.tools.bash && Math.random() < 0.2
-  const dmg = power(s0) * (isCrit ? CRIT_MULT : 1) * (twice ? 2 : 1)
-  const r = damage(s0, dmg + pending)
+  const gain = clickGain(s0) * (isCrit ? CRIT_MULT : 1) * (twice ? 2 : 1)
+  const s = earn(s0, gain + pending)
   pending = 0
-  const s = {
-    ...r.s,
+  await commit($, {
+    ...s,
     clicks: s0.clicks + (kind === 'click' ? 1 : 0),
-    bonusHits: s0.bonusHits + (kind === 'click' ? 0 : 1),
-  }
-  await commit($, s)
-  await update($, fx, () => ({ at: now, dmg, isCrit, cleared: r.last, reward: r.reward }))
-  if (r.cleared > 0 && s.level % SPRINT === 0) await toast($, `🏁 Sprint ${sprintOf(s.level) - 1} done! Sprint ${sprintOf(s.level)} begins`)
-  if (r.cleared > 0 && kind !== 'click') {
-    const what = r.cleared === 1 ? `"${r.last}"` : `${r.cleared} tasks`
-    await toast($, `🤖 ${kind === 'turn' ? 'Turn crit' : 'Free hit'} cleared ${what} (+${fmt(r.reward)} ✦)`)
-  }
+    bonusHits: s0.bonusHits + (kind === 'free' ? 1 : 0),
+  })
+  await flash($, isCrit ? 'crit' : kind, gain)
+}
+
+// A finished turn starts a frenzy: every agent works ×7 for 30 seconds.
+async function frenzy($: EngineInterface) {
+  const now = await $.clock.now()
+  const s = await read($, save)
+  await commit($, { ...s, frenzyUntil: now + FRENZY_MS, frenzies: (s.frenzies ?? 0) + 1 })
+  await flash($, 'frenzy', baseDps(s) * FRENZY_MULT)
+  if (baseDps(s) > 0) await toast($, `🔥 Frenzy! Your agents earn ×${FRENZY_MULT} for ${FRENZY_MS / 1000}s`)
 }
 
 async function buyGen($: EngineInterface, id: GenId) {
@@ -659,44 +525,46 @@ async function buyGen($: EngineInterface, id: GenId) {
   if (s.tokens < cost) return
   const n = (s.owned[id] ?? 0) + 1
   await commit($, { ...s, tokens: s.tokens - cost, owned: { ...s.owned, [id]: n } })
-  if (MILESTONES.includes(n)) await toast($, `🚀 ${n} ${g.label.toLowerCase()}s: they now work ×${milestoneMult(n)}`)
+  if (MILESTONES.includes(n)) {
+    await flash($, 'buy', 0)
+    await toast($, `🚀 ${n} ${g.label.toLowerCase()}s: they now earn ×${milestoneMult(n)}`)
+  }
 }
-
 async function buyTier($: EngineInterface, which: 'model' | 'infra') {
   const s = await read($, save)
   const list = which === 'model' ? MODELS : INFRA
   const next = nextTier(list, s[which])
   if (!next || s.tokens < next.cost) return
   await commit($, { ...s, tokens: s.tokens - next.cost, [which]: s[which] + 1 })
-  await toast($, which === 'model' ? `🧠 Upgraded to ${next.label}: prompts ×${next.mult}` : `🏭 ${next.label} online: agents ×${next.mult}`)
+  await flash($, 'buy', 0)
+  await toast($, which === 'model' ? `🧠 ${next.label}: prompts ×${next.mult}` : `🏭 ${next.label} online: agents ×${next.mult}`)
 }
-
 async function buyTool($: EngineInterface, id: ToolId) {
   const s = await read($, save)
   const t = TOOLS.find(x => x.id === id)!
   if (s.tools[id] || s.tokens < t.cost) return
   await commit($, { ...s, tokens: s.tokens - t.cost, tools: { ...s.tools, [id]: true } })
+  await flash($, 'buy', 0)
 }
-
 async function train($: EngineInterface) {
   const s = await read($, save)
   const gained = pointsFor(s.earned)
   if (gained < 1) return
   const points = s.points + gained
-  await commit($, { ...FRESH, points, trained: s.trained + 1, lifetime: s.lifetime, savedAt: s.savedAt })
+  await commit($, { ...FRESH, points, trained: s.trained + 1, lifetime: s.lifetime, played: s.played, savedAt: s.savedAt })
   await persist($)
   await toast($, `✨ Trained a new model! ${points} point${points === 1 ? '' : 's'}: everything ×${prestigeMult(points)}`)
 }
 
-function summary(s: Save): string[] {
-  const max = taskHp(s.level)
+function summary(s: Save, now: number): string[] {
   const pts = pointsFor(s.earned)
+  const next = savingFor(s)
   return [
-    `Task ${s.level + 1}: ${taskName(s.level)}  ${bar(1 - s.hp / max, 10)} ${Math.round((1 - s.hp / max) * 100)}%  (${fmt(s.hp)} / ${fmt(max)} HP)`,
-    `✦ ${fmt(s.tokens)} tokens, +${fmt(dps(s))}/s, ⚡ ${fmt(power(s))} per prompt (${modelAt(s.model).label}, ${infraAt(s.infra).label}, crit ${Math.round(critChance(s) * 100)}%)`,
-    `Agents: ${GENS.map(g => `${s.owned[g.id] ?? 0} ${g.label.toLowerCase()}`).join(', ')}`,
-    `Tools: ${TOOLS.filter(t => s.tools[t.id]).map(t => t.label).join(', ') || 'none yet'}`,
-    `Gathered ✦ ${fmt(s.lifetime)} over ${fmtTime((s.played ?? 0) + playedAcc)} · prompts ${fmt(s.clicks)}, free hits ${fmt(s.bonusHits)}, tasks cleared ${fmt(s.cleared)}`,
+    `✦ ${fmt(s.tokens)} tokens · +${fmt(dps(s, now))}/sec · ⚡ ${fmt(clickGain(s))} per prompt${isFrenzy(s, now) ? ` · 🔥 frenzy ${Math.ceil((s.frenzyUntil - now) / 1000)}s` : ''}`,
+    `Agents: ${GENS.filter(g => s.owned[g.id]).map(g => `${s.owned[g.id]} ${g.label.toLowerCase()}`).join(', ') || 'none yet'}`,
+    `Upgrades: ${modelAt(s.model).label}, ${infraAt(s.infra).label}${TOOLS.some(t => s.tools[t.id]) ? ', ' + TOOLS.filter(t => s.tools[t.id]).map(t => t.label).join(', ') : ''}`,
+    next ? `Saving for: ${next.label} (${fmt(next.cost)} ✦)` : 'You own everything in the shop.',
+    `Gathered ✦ ${fmt(s.lifetime)} over ${fmtTime((s.played ?? 0) + playedAcc)} · ${fmt(s.clicks)} prompts, ${fmt(s.bonusHits)} free hits, ${s.frenzies ?? 0} frenzies`,
     `Models trained: ${s.trained} (${s.points} points, ×${prestigeMult(s.points)})${pts >= 1 ? `, ${pts} more ready to claim in the shop` : ''}`,
   ]
 }
@@ -705,7 +573,7 @@ function summary(s: Save): string[] {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'idle', description: 'Open the Claude Idle shop (and show your progress)' })
+    await $.command.register({ name: 'idle', description: 'Open the Token Tycoon shop (and show your progress)' })
 
     const stored = (await $.store.get('save')) as Partial<Save> | undefined
     const p = (await $.store.get('prefs')) as Partial<Prefs> | undefined
@@ -720,14 +588,15 @@ export const register: Register = on => {
     }
 
     // Offline earnings: the agents kept working at half pace while you were away.
-    const rate = dps(s)
+    const rate = baseDps(s)
     const away = s.savedAt ? Math.min(now - s.savedAt, offlineCapMs(s)) : 0
     if (rate > 0 && away >= 60_000) {
-      const r = damage(s, rate * (away / 1000) * OFFLINE_RATE)
-      s = r.s
+      const gain = rate * (away / 1000) * OFFLINE_RATE
+      s = earn(s, gain)
       const mins = Math.round(away / 60_000)
       const when = mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60 ? ` ${mins % 60}m` : ''}` : `${mins}m`
-      await toast($, `🤖 While you were away (${when}): ${r.cleared} task${r.cleared === 1 ? '' : 's'} cleared, +${fmt(r.reward)} ✦`)
+      await update($, fx, () => ({ at: now, gain, kind: 'offline' as FxKind }))
+      await toast($, `🤖 While you were away (${when}) your agents earned +${fmt(gain)} ✦`)
     }
     await update($, save, () => s)
     await persist($)
@@ -742,16 +611,16 @@ export const register: Register = on => {
       if (md === 'oops' && t > oopsUntil) await setMood($, 'idle')
       else if (md === 'idle' && lastActivity && t - lastActivity > SLEEP_AFTER_MS) await setMood($, 'sleep')
       const cur = await read($, save)
-      const rate = dps(cur)
+      const rate = dps(cur, t)
       if (rate > 0) {
         pending += rate
-        const r = damage(cur, pending)
-        // Redraw only every few seconds, or right away when a task clears, so
-        // the character's animation isn't restarted every second.
-        if (r.cleared > 0 || ticks % 4 === 0) {
+        // Redraw only every few seconds (or when a frenzy ends), so the
+        // character's animation isn't restarted every second.
+        const frenzyJustEnded = cur.frenzyUntil && t >= cur.frenzyUntil && t - cur.frenzyUntil < 1000
+        if (ticks % 4 === 0 || frenzyJustEnded) {
+          const gain = pending
           pending = 0
-          await commit($, r.s)
-          if (r.cleared > 0) await update($, fx, () => ({ at: t - 400, dmg: 0, isCrit: false, cleared: r.last, reward: r.reward }))
+          await commit($, earn(cur, gain))
         }
       }
       if (dirty && ticks % 15 === 0) await persist($)
@@ -761,7 +630,7 @@ export const register: Register = on => {
   })
 
   on('tool.call', async ($, e, next) => {
-    await hit($, 'tool').catch(() => {})
+    await prompt($, 'free').catch(() => {})
     await touch($, 'working').catch(() => {})
     const res = await next(e)
     if (res && typeof res === 'object' && 'is_error' in res && (res as { is_error?: boolean }).is_error) {
@@ -777,7 +646,7 @@ export const register: Register = on => {
   })
 
   on('turn.complete', async ($, e, next) => {
-    if (!e.isAborted) await hit($, 'turn')
+    if (!e.isAborted && e.reason !== 'error') await frenzy($)
     if (e.reason === 'error') {
       oopsUntil = (await $.clock.now()) + 4000
       await touch($, 'oops')
@@ -788,21 +657,22 @@ export const register: Register = on => {
 
   on('command.run', { command: 'idle' }, async $ => {
     await update($, isHidden, () => false)
-    const opened = await $.ui.open({ id: PANE, title: 'Claude Idle' })
+    const opened = await $.ui.open({ id: PANE, title: 'Token Tycoon' })
     const s = await read($, save)
+    const now = await $.clock.now()
     return {
-      text: [opened.isPlaced ? 'Shop opened.' : 'Shop pane needs a wider window; here is where you stand:', ...summary(s)].join('\n'),
+      text: [opened.isPlaced ? 'Shop opened.' : 'Shop pane needs a wider window; here is where you stand:', ...summary(s, now)].join('\n'),
     }
   })
 
   on('ui.press', { plugin: 'token-tycoon', element: 'prompt' }, async $ => {
-    await hit($, 'click')
+    await prompt($, 'click')
     if ((await read($, mood)) === 'sleep') await touch($, 'idle')
     else lastActivity = await $.clock.now()
     return { element: 'prompt' }
   })
   on('ui.press', { plugin: 'token-tycoon', element: 'shop' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Claude Idle' })
+    await $.ui.open({ id: PANE, title: 'Token Tycoon' })
     return { element: 'shop' }
   })
   on('ui.press', { plugin: 'token-tycoon', element: 'hide' }, async $ => {
@@ -824,6 +694,14 @@ export const register: Register = on => {
   on('ui.press', { plugin: 'token-tycoon', element: 'buy-swarm' }, async $ => {
     await buyGen($, 'swarm')
     return { element: 'buy-swarm' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-fleet' }, async $ => {
+    await buyGen($, 'fleet')
+    return { element: 'buy-fleet' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-lab' }, async $ => {
+    await buyGen($, 'lab')
+    return { element: 'buy-lab' }
   })
   on('ui.press', { plugin: 'token-tycoon', element: 'buy-model' }, async $ => {
     await buyTier($, 'model')
@@ -871,10 +749,11 @@ export const register: Register = on => {
     const s = await read($, save)
     const f = await read($, fx)
     const md: Mood = e.props.isWorking && (await read($, mood)) !== 'sleep' ? 'working' : await read($, mood)
-    const max = taskHp(s.level)
-    const done = 1 - s.hp / max
     const columns = e.viewport?.columns ?? 80
     const narrow = columns < 70
+    const frenzyLeft = isFrenzy(s, now) ? Math.ceil((s.frenzyUntil - now) / 1000) : 0
+    const next_ = savingFor(s)
+    const buyable = canBuy(s)
 
     const art =
       e.surface === 'terminal' ? (
@@ -882,14 +761,10 @@ export const register: Register = on => {
       ) : (
         <Box flexDirection="row" flexShrink={0}>
           <Svg source={botSvg(md, f, now)} alt={`the coder, ${md}`} width={BOT_W} height={SCENE_PX_H} isInteractive />
-          <Svg source={blockSvg(s, f, now)} alt={`${taskName(s.level)} at ${Math.round(done * 100)}%`} width={BLOCK_W} height={SCENE_PX_H} isInteractive />
+          <Svg source={blockSvg(s, f, now)} alt={`${fmt(s.tokens)} tokens`} width={BLOCK_W} height={SCENE_PX_H} isInteractive />
         </Box>
       )
-    const justCleared = f.cleared && now - f.at < 1500
-    const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
-    // Three stat columns, together as wide as the bar and its percent.
     const COL = narrow ? 9 : 12
-    const BAR = COL * 3 - 5
     const col = (icon: string, value: string, label: string, color?: string) => (
       <Box width={COL} flexShrink={0}>
         <Text wrap="truncate">
@@ -905,18 +780,23 @@ export const register: Register = on => {
           {art}
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">
-              <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
-              <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1} · sprint ${sprintOf(s.level)}`}</Text>
-            </Text>
-            <Text wrap="truncate-end">
-              <Text color={barColor}>{bar(done, BAR)}</Text>
-              <Text dimColor>{` ${String(Math.round(done * 100)).padStart(3)}%`}</Text>
+              <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
+              <Text dimColor>{' tokens'}</Text>
             </Text>
             <Box flexDirection="row">
-              {col('✦ ', fmt(s.tokens), ' tokens', 'yellow')}
-              {col('+', fmt(dps(s)), '/sec', 'green')}
-              {col('⚡ ', fmt(power(s)), '/prompt')}
+              {col('+', fmt(dps(s, now)), '/sec', 'green')}
+              {col('⚡ ', fmt(clickGain(s)), '/prompt')}
+              {frenzyLeft > 0 && col('🔥 ', `×${FRENZY_MULT}`, ` ${frenzyLeft}s`, 'red')}
             </Box>
+            <Text wrap="truncate-end" dimColor>
+              {frenzyLeft > 0
+                ? `frenzy! every agent earns ×${FRENZY_MULT}`
+                : buyable
+                  ? `you can buy: ${buyable.label} (${fmt(buyable.cost)} ✦)`
+                  : next_
+                    ? `saving for: ${next_.label} (${fmt(next_.cost)} ✦)`
+                    : 'you own the whole shop'}
+            </Text>
           </Box>
           <Box flexShrink={0} alignSelf="flex-start">
             <Button key="hide" label="hide" plain dimColor onPress={ignorePress} />
@@ -935,14 +815,12 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e) as any
     const s = await read($, save)
     const p = await read($, prefs)
-    const max = taskHp(s.level)
-    const done = 1 - s.hp / max
+    const now = await $.clock.now()
     const nextModel = nextTier(MODELS, s.model)
     const nextInfra = nextTier(INFRA, s.infra)
     const pts = pointsFor(s.earned)
     const nextPointAt = POINT_EVERY * (pts + 1) * (pts + 1)
-    const columns = e.viewport?.columns ?? 80
-    const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
+    const frenzyLeft = isFrenzy(s, now) ? Math.ceil((s.frenzyUntil - now) / 1000) : 0
 
     const section = (title: string, children: any) => (
       <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
@@ -950,7 +828,6 @@ export const register: Register = on => {
         {children}
       </Box>
     )
-    // One shop row: a button with its price, and what it does beneath.
     // Affordable: a button and a yellow price. Not yet: plain dim text, no
     // button at all, so nothing lights up under the pointer.
     const row = (key: string, label: string, hotkey: string, cost: number, detail: string) => {
@@ -987,20 +864,13 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column" paddingX={1} rowGap={1}>
         <Box flexDirection="column">
-          <Text wrap="truncate-end">
-            <Text bold>{taskName(s.level)}</Text>
-            <Text dimColor>{`   task ${s.level + 1} · sprint ${sprintOf(s.level)} · pays ${fmt(taskReward(s.level))} ✦`}</Text>
-          </Text>
-          <Text wrap="truncate-end">
-            <Text color={barColor}>{bar(done, Math.max(10, Math.min(20, columns - 30)))}</Text>
-            <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
-          </Text>
-          <Box flexDirection="row" paddingTop={1} columnGap={2}>
+          <Box flexDirection="row" columnGap={2}>
             {stat('✦', fmt(s.tokens), 'tokens', 'yellow')}
-            {stat('▲', `${fmt(dps(s))}`, '/sec', 'green')}
-            {stat('⚡', fmt(power(s)), '/prompt')}
+            {stat('▲', fmt(dps(s, now)), '/sec', 'green')}
+            {stat('⚡', fmt(clickGain(s)), '/prompt')}
             {stat('✧', `${Math.round(critChance(s) * 100)}%`, `crit ×${CRIT_MULT}`)}
           </Box>
+          {frenzyLeft > 0 && <Text color="red">{`🔥 Frenzy: agents ×${FRENZY_MULT} for ${frenzyLeft}s more`}</Text>}
           <Box paddingTop={1}>
             <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
           </Box>
@@ -1009,8 +879,9 @@ export const register: Register = on => {
         {section('Agents', GENS.map(g => {
           const n = s.owned[g.id] ?? 0
           const nm = nextMilestone(n)
-          const each = `+${fmt(genDps(s, g))}/sec each`
-          return row(`buy-${g.id}`, n ? `${g.label} ×${n}` : g.label, g.hotkey, genCost(g, n), nm ? `${each} · ×2 at ${nm}` : each)
+          const each = `+${fmt(genRate(s, g))}/sec each`
+          const total = n ? ` · ${fmt(genRate(s, g) * n)}/sec from ${n}` : ''
+          return row(`buy-${g.id}`, n ? `${g.label} ×${n}` : g.label, g.hotkey, genCost(g, n), `${each}${total}${nm ? ` · ×2 at ${nm}` : ''}`)
         }))}
 
         {section('Upgrades', [
@@ -1041,10 +912,9 @@ export const register: Register = on => {
             {stat('✦', fmt(s.lifetime), 'gathered', 'yellow')}
             {stat('◷', fmtTime((s.played ?? 0) + playedAcc), 'played')}
             {stat('⚡', fmt(s.clicks), 'prompts')}
-            {stat('✓', fmt(s.cleared), 'cleared')}
+            {stat('🔥', String(s.frenzies ?? 0), 'frenzies')}
           </Box>,
-          <Text dimColor wrap="wrap">{`${fmt(s.bonusHits)} free hits from real work`}</Text>,
-          <Text dimColor wrap="wrap">{`tool call = free hit · turn = crit · offline ½ pace, ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h max`}</Text>,
+          <Text dimColor wrap="wrap">{`${fmt(s.bonusHits)} free prompts from real tool calls · a finished turn starts a frenzy · agents keep earning while you're away (½ pace, ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h max)`}</Text>,
           <Box paddingTop={1}>
             <Button key="popups" label={`Popups: ${p.popups ? 'On' : 'Off'}`} onPress={ignorePress} />
           </Box>,

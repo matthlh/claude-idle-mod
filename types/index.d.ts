@@ -1,14 +1,11 @@
-export type GenId = 'agent' | 'subagent' | 'robot' | 'swarm'
+export type GenId = 'agent' | 'subagent' | 'robot' | 'swarm' | 'fleet' | 'lab'
 export type ToolId = 'read' | 'edit' | 'bash' | 'grep' | 'web'
 
 export type Save = {
   tokens: number
   earned: number
   lifetime: number
-  level: number
-  hp: number
   clicks: number
-  cleared: number
   owned: Record<GenId, number>
   model: number
   infra: number
@@ -16,17 +13,14 @@ export type Save = {
   points: number
   trained: number
   bonusHits: number
+  frenzies: number
+  frenzyUntil: number
   played: number
   savedAt: number
 }
 
-export type Fx = {
-  at: number
-  dmg: number
-  isCrit: boolean
-  cleared: string | null
-  reward: number
-}
+export type FxKind = 'click' | 'free' | 'crit' | 'buy' | 'frenzy' | 'offline' | null
+export type Fx = { at: number; gain: number; kind: FxKind }
 
 export type Prefs = { popups: boolean }
 export type Mood = 'idle' | 'working' | 'sleep' | 'oops'

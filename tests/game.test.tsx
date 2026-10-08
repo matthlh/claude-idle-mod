@@ -1,36 +1,32 @@
 import { test, expect, mock } from 'claude-code/testing'
-import { FRESH, damage, fmt, taskHp, taskReward, pointsFor, sceneSvg, sceneCells, crackStage } from '../hooks/register'
+import { FRESH, clickGain, dps, genCost, milestoneMult, fmt, pointsFor, sceneSvg, sceneCells, GENS } from '../hooks/register'
 
-test('damage rolls over into the next tasks and pays for each', async () => {
-  const s0 = { ...FRESH, hp: taskHp(0), level: 0 }
-  const one = damage(s0, 3)
-  expect(one.cleared).toBe(0)
-  expect(one.s.hp).toBe(taskHp(0) - 3)
-  const big = damage(s0, taskHp(0) + taskHp(1) + 1)
-  expect(big.cleared).toBe(2)
-  expect(big.s.level).toBe(2)
-  expect(big.s.hp).toBe(taskHp(2) - 1)
-  expect(big.reward).toBe(taskReward(0) + taskReward(1))
-  expect(big.s.tokens).toBe(taskReward(0) + taskReward(1))
+test('the numbers: clicks, income, milestones, prices, prestige', async () => {
+  expect(clickGain(FRESH)).toBe(1)
+  expect(dps(FRESH)).toBe(0)
+  const some = { ...FRESH, owned: { ...FRESH.owned, agent: 10, subagent: 2 } }
+  expect(milestoneMult(10)).toBe(2)
+  expect(milestoneMult(9)).toBe(1)
+  expect(Math.abs(dps(some) - (10 * 0.1 * 2 + 2 * 1)) < 1e-9).toBe(true)
+  expect(Math.abs(dps({ ...some, frenzyUntil: 10_000 }, 5000) - (10 * 0.1 * 2 + 2 * 1) * 7) < 1e-9).toBe(true)
+  expect(genCost(GENS[0]!, 0)).toBe(15)
+  expect(genCost(GENS[0]!, 1)).toBe(18)
   expect(fmt(999)).toBe('999')
   expect(fmt(1234)).toBe('1.23K')
-  expect(fmt(2_500_000)).toBe('2.50M')
-  expect(pointsFor(249_999)).toBe(0)
-  expect(pointsFor(250_000)).toBe(1)
-  expect(pointsFor(1_000_000)).toBe(2)
-  expect(crackStage(10, 10)).toBe(0)
-  expect(crackStage(1, 10)).toBe(4)
+  expect(pointsFor(499_999)).toBe(0)
+  expect(pointsFor(500_000)).toBe(1)
+  expect(pointsFor(2_000_000)).toBe(2)
 })
 
 test('the scene draws on both surfaces', async () => {
-  const f = { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }
-  const svg = sceneSvg({ ...FRESH, hp: 3 }, { ...f, at: 1000, dmg: 7, isCrit: true }, 1200)
+  const f = { at: 0, gain: 0, kind: null }
+  const svg = sceneSvg(FRESH, { at: 1000, gain: 7, kind: 'click' }, 1200)
   expect(svg).toContain('<animate')
-  expect(svg).toContain('-7!')
+  expect(svg).toContain('+7')
   expect(sceneCells(FRESH, f, 0).length).toBeGreaterThan(100)
 })
 
-test('band draws, prompt hits the task, shop pane sells agents', async ($, on) => {
+test('band draws, prompt earns tokens, shop pane sells agents', async ($, on) => {
   mock.store(on)
   mock.clock(on)
   const text = async (ui: any) => JSON.stringify(await ui.drawn())
@@ -46,8 +42,7 @@ test('band draws, prompt hits the task, shop pane sells agents', async ($, on) =
     expect(await ui.find({ type: surface === 'terminal' ? 'Raster' : 'Svg' })).toBeDefined()
     const before = await text(ui)
     await ui.press({ key: 'prompt' })
-    const after = await text(ui)
-    expect(after).not.toBe(before)
+    expect(await text(ui)).not.toBe(before)
     await ui.unmount()
   }
 
@@ -56,14 +51,13 @@ test('band draws, prompt hits the task, shop pane sells agents', async ($, on) =
     surface: 'terminal',
     component: 'Pane',
     requestId: 'token-tycoon',
-    props: { title: 'Claude Idle', isFocused: false } as any,
+    props: { title: 'Token Tycoon', isFocused: false } as any,
     viewport: { columns: 90, rows: 40 },
   })
-  // Too poor: the row is plain text, no button to press.
+  // Two clicks so far: too poor, the row is plain text with no button.
   expect(await pane.find({ key: 'buy-agent' })).toBeUndefined()
-  expect(await text(pane)).toContain('Agent   20 ✦')
-  // Prompt until a few tasks are cleared, which pays enough for one agent.
-  for (let i = 0; i < 120; i++) await pane.press({ key: 'prompt' })
+  expect(await text(pane)).toContain('Agent   15 ✦')
+  for (let i = 0; i < 20; i++) await pane.press({ key: 'prompt' })
   expect(String((await pane.find({ key: 'buy-agent' }))?.props?.label)).toBe('Agent')
   await pane.press({ key: 'buy-agent' })
   expect(await text(pane)).toContain('Agent ×1')
