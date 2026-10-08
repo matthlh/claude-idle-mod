@@ -309,7 +309,7 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
 }
 
 const svgOpen = (w: number) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible">`
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible" style="background:transparent">`
 
 function botBody(dx: number): string {
   const f: Fx = { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }
@@ -640,34 +640,33 @@ export const register: Register = on => {
       )
     const justCleared = f.cleared && now - f.at < 1500
     const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
-    const sep = <Text dimColor>{'  │  '}</Text>
 
     return (
-      <Box flexDirection="column" paddingX={1} rowGap={0}>
+      <Box flexDirection="column" paddingX={1}>
         <Box flexDirection="row" alignItems="center" columnGap={2}>
           {art}
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">
-              <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared} cleared` : taskName(s.level)}</Text>
-              <Text dimColor>{`   task ${s.level + 1}`}</Text>
+              <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
+              <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1}`}</Text>
             </Text>
             <Text wrap="truncate-end">
               <Text color={barColor}>{bar(done, narrow ? 12 : 24)}</Text>
-              <Text>{` ${Math.round(done * 100)}%`}</Text>
-              {!narrow && <Text dimColor>{`   ${fmt(s.hp)} / ${fmt(max)} HP`}</Text>}
+              <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
             </Text>
             <Text wrap="truncate-end">
               <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
-              {sep}
-              <Text color="green">{`▲ ${fmt(dps(s))}/s`}</Text>
-              {sep}
-              <Text>{`⚡ ${fmt(power(s))}/hit`}</Text>
-              {!narrow && sep}
-              {!narrow && <Text dimColor>{`${modelAt(s.model).label} · ${infraAt(s.infra).label}`}</Text>}
+              <Text dimColor>{` tokens`}</Text>
+              <Text dimColor>{'     '}</Text>
+              <Text color="green">{`+${fmt(dps(s))}`}</Text>
+              <Text dimColor>{` per second`}</Text>
+              <Text dimColor>{'     '}</Text>
+              <Text>{`⚡ ${fmt(power(s))}`}</Text>
+              <Text dimColor>{` per prompt`}</Text>
             </Text>
           </Box>
         </Box>
-        <Box flexDirection="row" columnGap={1} paddingTop={0}>
+        <Box flexDirection="row" columnGap={1}>
           <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
           <Button key="shop" label="Shop" onPress={ignorePress} />
           <Button key="hide" label="Hide" onPress={ignorePress} />
@@ -687,84 +686,111 @@ export const register: Register = on => {
     const nextInfra = nextTier(INFRA, s.infra)
     const pts = pointsFor(s.earned)
     const nextPointAt = POINT_EVERY * (pts + 1) * (pts + 1)
+    const columns = e.viewport?.columns ?? 80
+    const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
+    const perAgent = infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
 
-    const row = (key: string, label: string, hotkey: string | undefined, cost: number | null, detail: string) => (
-      <Box flexDirection="row" columnGap={1}>
-        <Button key={key} label={label} hotkey={hotkey} dimColor={cost !== null && s.tokens < cost} onPress={ignorePress} />
-        <Text dimColor wrap="truncate-end">
-          {cost === null ? detail : `${fmt(cost)} ✦ · ${detail}`}
+    const section = (title: string, children: any) => (
+      <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+        <Text bold>{title}</Text>
+        {children}
+      </Box>
+    )
+    // One shop row: a button, the price, and what it does.
+    const row = (key: string, label: string, hotkey: string, cost: number, detail: string) => {
+      const can = s.tokens >= cost
+      return (
+        <Box flexDirection="row" columnGap={2} alignItems="center">
+          <Box width={18} flexShrink={0}>
+            <Button key={key} label={label} hotkey={hotkey} dimColor={!can} onPress={ignorePress} />
+          </Box>
+          <Box width={9} flexShrink={0}>
+            <Text color={can ? 'yellow' : undefined} dimColor={!can}>{`${fmt(cost)} ✦`}</Text>
+          </Box>
+          <Text dimColor wrap="truncate-end">{detail}</Text>
+        </Box>
+      )
+    }
+    const owned = (label: string, detail: string) => (
+      <Box flexDirection="row" columnGap={2}>
+        <Box width={18} flexShrink={0}>
+          <Text color="green">{`✓ ${label}`}</Text>
+        </Box>
+        <Box width={9} flexShrink={0}>
+          <Text dimColor>owned</Text>
+        </Box>
+        <Text dimColor wrap="truncate-end">{detail}</Text>
+      </Box>
+    )
+    const stat = (icon: string, value: string, label: string, color?: string) => (
+      <Box flexDirection="column" width={16}>
+        <Text>
+          <Text color={color} bold>{`${icon} ${value}`}</Text>
         </Text>
+        <Text dimColor>{label}</Text>
       </Box>
     )
 
     return (
       <Box flexDirection="column" paddingX={1} rowGap={1}>
         <Box flexDirection="column">
-          <Text>
+          <Text wrap="truncate-end">
             <Text bold>{taskName(s.level)}</Text>
-            <Text dimColor>{`  task #${s.level + 1}`}</Text>
+            <Text dimColor>{`   task ${s.level + 1} · pays ${fmt(taskReward(s.level))} ✦`}</Text>
           </Text>
-          <Text>
-            {bar(done, 20)} {Math.round(done * 100)}% <Text dimColor>({fmt(s.hp)} / {fmt(max)} HP, pays {fmt(taskReward(s.level))} ✦)</Text>
+          <Text wrap="truncate-end">
+            <Text color={barColor}>{bar(done, Math.max(10, Math.min(40, columns - 20)))}</Text>
+            <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
           </Text>
-          <Text>
-            <Text color="yellow" bold>✦ {fmt(s.tokens)}</Text>
-            <Text>{`  +${fmt(dps(s))}/s  ⚡ ${fmt(power(s))} per prompt, crit ${Math.round(critChance(s) * 100)}% for ×${CRIT_MULT}`}</Text>
-          </Text>
-          <Box flexDirection="row" columnGap={1}>
-            <Button key="prompt" label="Prompt ⚡" hotkey="p" onPress={ignorePress} />
-            <Text dimColor>press p while the pane has focus</Text>
+          <Box flexDirection="row" paddingTop={1} columnGap={2} flexWrap="wrap">
+            {stat('✦', fmt(s.tokens), 'tokens', 'yellow')}
+            {stat('▲', `${fmt(dps(s))}/s`, 'from agents', 'green')}
+            {stat('⚡', fmt(power(s)), 'per prompt')}
+            {stat('✧', `${Math.round(critChance(s) * 100)}%`, `crit chance, ×${CRIT_MULT}`)}
+          </Box>
+          <Box flexDirection="row" columnGap={1} paddingTop={1}>
+            <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
+            <Text dimColor>hotkeys work while the pane has focus</Text>
           </Box>
         </Box>
 
-        <Box flexDirection="column">
-          <Text bold>Agents <Text dimColor>(passive damage per second)</Text></Text>
-          {GENS.map(g => {
-            const n = s.owned[g.id] ?? 0
-            return row(`buy-${g.id}`, `${g.hotkey}: ${g.label}${n ? ` ×${n}` : ''}`, g.hotkey, genCost(g, n), `+${fmt(g.dps * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points))}/s each`)
-          })}
-        </Box>
+        {section('Agents', GENS.map(g => {
+          const n = s.owned[g.id] ?? 0
+          return row(`buy-${g.id}`, n ? `${g.label} ×${n}` : g.label, g.hotkey, genCost(g, n), `+${fmt(g.dps * perAgent)} per second each`)
+        }))}
 
-        <Box flexDirection="column">
-          <Text bold>Upgrades</Text>
-          {nextModel
-            ? row('buy-model', `m: Model → ${nextModel.label}`, 'm', nextModel.cost, `prompts ×${nextModel.mult} (now ${modelAt(s.model).label} ×${modelAt(s.model).mult})`)
-            : <Text dimColor>  Model: {modelAt(s.model).label} ×{modelAt(s.model).mult} (maxed)</Text>}
-          {nextInfra
-            ? row('buy-infra', `i: Infra → ${nextInfra.label}`, 'i', nextInfra.cost, `agents ×${nextInfra.mult} (now ${infraAt(s.infra).label} ×${infraAt(s.infra).mult})`)
-            : <Text dimColor>  Infra: {infraAt(s.infra).label} ×{infraAt(s.infra).mult} (maxed)</Text>}
-        </Box>
+        {section('Upgrades', [
+          nextModel
+            ? row('buy-model', `Model → ${nextModel.label}`, 'm', nextModel.cost, `prompts ×${nextModel.mult}, now ${modelAt(s.model).label} ×${modelAt(s.model).mult}`)
+            : owned(`Model: ${modelAt(s.model).label}`, `prompts ×${modelAt(s.model).mult}, the best there is`),
+          nextInfra
+            ? row('buy-infra', `Infra → ${nextInfra.label}`, 'i', nextInfra.cost, `agents ×${nextInfra.mult}, now ${infraAt(s.infra).label} ×${infraAt(s.infra).mult}`)
+            : owned(`Infra: ${infraAt(s.infra).label}`, `agents ×${infraAt(s.infra).mult}, the best there is`),
+        ])}
 
-        <Box flexDirection="column">
-          <Text bold>Tools</Text>
-          {TOOLS.map(t =>
-            s.tools[t.id]
-              ? <Text dimColor>  ✓ {t.label}: {t.desc}</Text>
-              : row(`buy-${t.id}`, `${t.hotkey}: ${t.label}`, t.hotkey, t.cost, t.desc),
-          )}
-        </Box>
+        {section('Tools', TOOLS.map(t => (s.tools[t.id] ? owned(t.label, t.desc) : row(`buy-${t.id}`, t.label, t.hotkey, t.cost, t.desc))))}
 
-        <Box flexDirection="column">
-          <Text bold>Train a new model <Text dimColor>(prestige)</Text></Text>
-          {pts >= 1 ? (
-            <Box flexDirection="row" columnGap={1}>
-              <Button key="train" label={`t: Train (+${pts} point${pts === 1 ? '' : 's'})`} hotkey="t" onPress={ignorePress} />
-              <Text dimColor wrap="truncate-end">resets tokens, agents and upgrades; everything ×{prestigeMult(s.points + pts)} after</Text>
+        {section('Train a new model', [
+          pts >= 1 ? (
+            <Box flexDirection="row" columnGap={2} alignItems="center">
+              <Box width={18} flexShrink={0}>
+                <Button key="train" label={`Train (+${pts})`} hotkey="t" variant="primary" onPress={ignorePress} />
+              </Box>
+              <Text dimColor wrap="truncate-end">{`start over with everything ×${prestigeMult(s.points + pts)}, forever`}</Text>
             </Box>
           ) : (
-            <Text dimColor>  earn {fmt(nextPointAt)} ✦ this run to train ({fmt(s.earned)} so far)</Text>
-          )}
-          <Text dimColor>  models trained: {s.trained}, points: {s.points} (×{prestigeMult(s.points)} to everything)</Text>
-        </Box>
+            <Text dimColor wrap="truncate-end">{`earn ${fmt(nextPointAt)} ✦ in this run to train one (${fmt(s.earned)} so far)`}</Text>
+          ),
+          <Text dimColor>{`trained ${s.trained} · ${s.points} point${s.points === 1 ? '' : 's'} · everything ×${prestigeMult(s.points)}`}</Text>,
+        ])}
 
-        <Box flexDirection="column">
-          <Text bold>Stats</Text>
-          <Text dimColor>  prompts {fmt(s.clicks)} · free hits from real work {fmt(s.bonusHits)} · tasks cleared {fmt(s.cleared)} · lifetime ✦ {fmt(s.lifetime)}</Text>
-          <Text dimColor>  every real tool call is a free hit; every finished turn is a crit; agents keep working while you're away (half pace, up to {OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h)</Text>
-          <Box flexDirection="row" columnGap={1}>
+        {section('Stats', [
+          <Text dimColor wrap="truncate-end">{`${fmt(s.clicks)} prompts · ${fmt(s.bonusHits)} free hits from real work · ${fmt(s.cleared)} tasks cleared · ${fmt(s.lifetime)} ✦ lifetime`}</Text>,
+          <Text dimColor wrap="truncate-end">{`every tool call is a free hit, every finished turn a crit; agents keep going while you're away (half pace, up to ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h)`}</Text>,
+          <Box paddingTop={1}>
             <Button key="popups" label={`Popups: ${p.popups ? 'On' : 'Off'}`} onPress={ignorePress} />
-          </Box>
-        </Box>
+          </Box>,
+        ])}
       </Box>
     )
   })

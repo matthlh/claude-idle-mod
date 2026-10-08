@@ -60,14 +60,14 @@ test('band draws, prompt hits the task, shop pane sells agents', async ($, on) =
     viewport: { columns: 90, rows: 40 },
   })
   const agentLabel = async () => String((await pane.find({ key: 'buy-agent' }))?.props?.label)
-  expect(await agentLabel()).toBe('1: Agent')
+  expect(await agentLabel()).toBe('Agent')
   // Too poor: nothing happens.
   await pane.press({ key: 'buy-agent' })
-  expect(await agentLabel()).toBe('1: Agent')
+  expect(await agentLabel()).toBe('Agent')
   // Prompt until two tasks are cleared (10 + 12 HP at power 1), which pays 21 tokens.
   for (let i = 0; i < 40; i++) await pane.press({ key: 'prompt' })
   await pane.press({ key: 'buy-agent' })
-  expect(await agentLabel()).toBe('1: Agent ×1')
+  expect(await agentLabel()).toBe('Agent ×1')
   await pane.press({ key: 'buy-model' })
   expect(await text(pane)).toContain('Model → Sonnet')
   await pane.unmount()
