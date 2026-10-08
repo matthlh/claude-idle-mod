@@ -438,36 +438,61 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
 const svgOpen = (w: number) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible" style="background:transparent">`
 // Horizontal runs of one color become one rect, which keeps the source small.
-// Which frames a mood cycles through, and how long each shows.
+// Each state is one steady base frame, with other frames shown only during
+// short slots of a cycle (a blink, a glance up), plus a smooth motion on top.
 const F = { idle: 0, eyesClosed: 1, lookUp: 2, blink: 3, typing: 4, thinking: 5, sleep1: 6, sleep2: 7, oops: 8, cheer1: 9, cheer2: 10, over1: 11, over2: 12, hit: 13 }
-function moodFrames(md: Mood, f: Fx, now: number): { frames: number[]; dur: number } {
-  if (now - f.at < 500 && f.dmg > 0 && !f.isCrit) return { frames: [F.hit], dur: 1 }
-  if (now - f.at < 1200 && f.isCrit) return { frames: [F.over1, F.over2], dur: 0.3 }
-  if (f.cleared && now - f.at < 1500) return { frames: [F.cheer1, F.cheer2], dur: 0.5 }
-  if (md === 'working') return { frames: [F.typing, F.typing, F.thinking], dur: 0.7 }
-  if (md === 'sleep') return { frames: [F.sleep1, F.sleep2], dur: 1.2 }
-  if (md === 'oops') return { frames: [F.oops], dur: 1 }
-  return { frames: [F.idle, F.idle, F.blink, F.idle, F.lookUp, F.idle, F.eyesClosed], dur: 0.9 }
+type Slot = [number, number]
+type Scene = { base: number; cycle: number; extras: { frame: number; slots: Slot[] }[]; motion: string }
+const bob = (px: number, dur: number) =>
+  `<animateTransform attributeName="transform" type="translate" values="0 0;0 ${-px};0 0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" dur="${dur}s" repeatCount="indefinite"/>`
+const shake = (px: number, dur: number) =>
+  `<animateTransform attributeName="transform" type="translate" values="0 0;${px} 0;0 0;${-px} 0;0 0" dur="${dur}s" repeatCount="indefinite"/>`
+function sceneFor(md: Mood, f: Fx, now: number): Scene {
+  if (now - f.at < 500 && f.dmg > 0 && !f.isCrit)
+    return { base: F.hit, cycle: 1, extras: [], motion: `<animateTransform attributeName="transform" type="translate" values="0 0;3 -2;0 0" dur="0.3s" repeatCount="1"/>` }
+  if (now - f.at < 1200 && f.isCrit)
+    return { base: F.over1, cycle: 0.4, extras: [{ frame: F.over2, slots: [[0.5, 1]] }], motion: shake(1, 0.16) }
+  if (f.cleared && now - f.at < 1500)
+    return { base: F.cheer1, cycle: 0.7, extras: [{ frame: F.cheer2, slots: [[0.5, 1]] }], motion: bob(3, 0.35) }
+  if (md === 'working')
+    return { base: F.typing, cycle: 6, extras: [{ frame: F.thinking, slots: [[0.55, 0.8]] }], motion: bob(1, 0.9) }
+  if (md === 'sleep')
+    return { base: F.sleep1, cycle: 3, extras: [{ frame: F.sleep2, slots: [[0.5, 1]] }], motion: bob(0.7, 3) }
+  if (md === 'oops')
+    return { base: F.oops, cycle: 1, extras: [], motion: shake(0.6, 0.5) }
+  return {
+    base: F.idle,
+    cycle: 14,
+    extras: [
+      { frame: F.blink, slots: [[0.22, 0.23], [0.58, 0.59], [0.86, 0.87]] },
+      { frame: F.lookUp, slots: [[0.4, 0.5]] },
+      { frame: F.eyesClosed, slots: [[0.7, 0.78]] },
+    ],
+    motion: bob(1, 2.6),
+  }
 }
 // A frame is a set of paths in FRAME_SIZE units, scaled to the character box.
 function frameImage(i: number, dx: number): string {
   const k = (CHAR_PX / FRAME_SIZE).toFixed(4)
   return `<g transform="translate(${dx} 0) scale(${k})">${FRAMES[i] ?? FRAMES[0] ?? ''}</g>`
 }
-// Each frame is a group shown during its slot of one repeating cycle.
+// Opacity steps over one cycle: 1 inside the slots, 0 outside (or the reverse).
+function stepped(slots: Slot[], cycle: number, inside: number): string {
+  const marks = [0, ...slots.flat(), 1].filter((v, i, a) => i === 0 || v !== a[i - 1])
+  const vals: number[] = []
+  for (let i = 0; i < marks.length; i++) {
+    const t = marks[i]!
+    const isIn = slots.some(([a, b]) => t >= a && t < b)
+    vals.push(isIn ? inside : 1 - inside)
+  }
+  return `<animate attributeName="opacity" values="${vals.join(';')}" keyTimes="${marks.map(v => v.toFixed(3)).join(';')}" dur="${cycle}s" calcMode="discrete" repeatCount="indefinite"/>`
+}
 function botBodyFor(md: Mood, f: Fx, now: number, dx: number): string {
-  const { frames, dur } = moodFrames(md, f, now)
-  if (frames.length === 1) return `<g>${frameImage(frames[0]!, dx)}</g>`
-  const total = frames.length * dur
-  return frames
-    .map((fi, i) => {
-      const a = i / frames.length
-      const b = (i + 1) / frames.length
-      const values = i === 0 ? '1;0' : b >= 0.999 ? '0;1' : '0;1;0'
-      const keyTimes = i === 0 ? `0;${b.toFixed(3)}` : b >= 0.999 ? `0;${a.toFixed(3)}` : `0;${a.toFixed(3)};${b.toFixed(3)}`
-      return `<g>${frameImage(fi, dx)}<animate attributeName="opacity" values="${values}" keyTimes="${keyTimes}" dur="${total.toFixed(2)}s" calcMode="discrete" repeatCount="indefinite"/></g>`
-    })
-    .join('')
+  const sc = sceneFor(md, f, now)
+  const all = sc.extras.flatMap(x => x.slots)
+  let out = `<g>${frameImage(sc.base, dx)}${all.length ? stepped(all, sc.cycle, 0) : ''}</g>`
+  for (const x of sc.extras) out += `<g>${frameImage(x.frame, dx)}${stepped(x.slots, sc.cycle, 1)}</g>`
+  return `<g>${out}${sc.motion}</g>`
 }
 // The docs and the tests still get a frame without a mood.
 function botBody(dx: number): string {
