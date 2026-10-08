@@ -337,6 +337,134 @@ const CRACKS: [number, number][][] = [
   [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
 ]
 export type Palette = Record<string, number>
+// The desktop character: a hooded portrait, 44×56 at one CSS pixel per cell,
+// generated from shape primitives (see docs/portrait.py in the repo). Frame B blinks.
+const PORTRAIT_A = [
+  '............................................',
+  '................OOOOOOOOOOOO................',
+  '.............OOOgggGGGGGGGGGOOO.............',
+  '...........OOgggggggGGGGGGGGGGGOO...........',
+  '..........OgggggggggGGGGGGGGGGGGGO..........',
+  '.........OggggggggggGGGGGGGGGGGGggg.........',
+  '........OgggggggggggGGGGGGGGGGGGGOOO........',
+  '.......OgggggggggOOOOOOOOOOGGGGGGGGOO.......',
+  '......OggggggggOOiHHHHiHHHHOOGGGGGGGOO......',
+  '.....OggggggggOHiHHHHiHHHHiHHOGGGGGGOGO.....',
+  '....OggggggggOHiHHHHiHHHHiHHHHOGGGGGOGGO....',
+  '....OgggggggOHiHHHHiHHHHiHHHHiHOGGGOGGGO....',
+  '...OgggggggOHHHHHHHHHHHHHHHHHHHHOGGGGGGGO...',
+  '...OggggggOHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO...',
+  '..OGgggggOSHHHHHHHHHHHHHHHHHHHHHHSOGGGGGGO..',
+  '..OGgggggOHHHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO..',
+  '..OGggggOSHHHHHHHHHiHHHHHHHHHHHHHHSOGGGGGO..',
+  '..OGggggOhhhhHHHHHiHHHHHHiHHHHHhhhhOGGGGGO..',
+  '.OGGgggOShhhhHHHHiHHHHHHiHHHHHHhhhhSOGGGGGO.',
+  '.OGGGggOShhhhHHHiHHHHHHiHHHHHHHhhhhSOGGGGGO.',
+  '.OGGGGGOShhhhHHiFHHHHFiHFHHHFiHhhhhSOGGGGGO.',
+  '.OGGGGGOShhhhHhHhHHFHFHHFHhHhHHhhhhSOGGGGGO.',
+  '.OGGGGGOhhhhhiFHFFHFiFHFFHFiFFhhhhhhOGGGGGO.',
+  '.OGGGGGOShhhhLLLLLHFFFHFFLLLLLhhhhhSOGGGGGO.',
+  '.OGGGGOSShhhhhEEEEiFFFFFFEEEEEhhhhhSSOGGGGO.',
+  '.OGGGGGOShhhhhWEEEFFFFFFFEWEEEhhhhhSOGGGGGO.',
+  'OGGGGGGOShhhhhWEEEFFFFFFFEWEEEhhhhhSOGGGGGGO',
+  'OGGGGGGOShhhhhEEeEFFFFFFFEEEeEhhhhhSOGGGGGGO',
+  'OGGGGGGOSShhhhEeEEFFFFFFFEEeEEhhhhSSOGGGGGGO',
+  'OGGGGGGOSShhhhFFFFFFFFfFFFFFFFhhhhSSOGGGGGGO',
+  'OGGGGGGOSSShhFBBFFFFFFFFFFFFBBFhhSSSOGGGGGGO',
+  'OGGGGGGGOSShhHfFFFFFFFFFFFFFFfHhhSSOGGGGGGGO',
+  'OGGGGGGGOSShhHfFFFFFMMMMFFFFFfHhhSSOGGGGGGGO',
+  'OGGGGGGGGOShhHHFFFFFFFFFFFFFFHHhhSOGGGGGGGGO',
+  'OGGGGGGGGOShhSHffffffffffffffHShhSOGGGGGGGGO',
+  'OGGGGGGGGGOhhSSHHffffffffffHHSShhOGGGGGGGGGO',
+  'OGGGGGGGGGGOSSSSSffffffffffSSSSSOGGGGGGGGGGO',
+  'OGGGGGGGGGGGOSSSSffFFFFFFffSSSSOGGGGGGGGGGGO',
+  'OGGGGGGGGGGGGOSSSffffffffffSSSOGGGGGGGGGGGGO',
+  'OGGGGGGGGGGGGGOSSffffffffffSSOGGGGGGGGGGGGGO',
+  'OGGGGGGJcCCCCCCCCSSSSSSSSSSCCCCCCCCcJGGGGGGO',
+  'OGGGGGJJcCCCCCCccJJJJJJJJJJccCCCCCCcJJGGGGGO',
+  'OGGGGGJcCCCCCCcJJJJJJJJJJJJJJcCCCCCCcJGGGGGO',
+  'OGGGGJJcCCCCCcJJJJJJJJJJJJJJJJcCCCCCcJJGGGGO',
+  'OGGGGJcccccccJJKKKKKKKjKKKKKKJJcccccccJGGGGO',
+  'OGGGJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJGGGO',
+  'OGGJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
+  'OGGJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
+  'OGJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJGO',
+  'jGJJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJJGj',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+]
+const PORTRAIT_B = [
+  '............................................',
+  '................OOOOOOOOOOOO................',
+  '.............OOOgggGGGGGGGGGOOO.............',
+  '...........OOgggggggGGGGGGGGGGGOO...........',
+  '..........OgggggggggGGGGGGGGGGGGGO..........',
+  '.........OggggggggggGGGGGGGGGGGGggg.........',
+  '........OgggggggggggGGGGGGGGGGGGGOOO........',
+  '.......OgggggggggOOOOOOOOOOGGGGGGGGOO.......',
+  '......OggggggggOOiHHHHiHHHHOOGGGGGGGOO......',
+  '.....OggggggggOHiHHHHiHHHHiHHOGGGGGGOGO.....',
+  '....OggggggggOHiHHHHiHHHHiHHHHOGGGGGOGGO....',
+  '....OgggggggOHiHHHHiHHHHiHHHHiHOGGGOGGGO....',
+  '...OgggggggOHHHHHHHHHHHHHHHHHHHHOGGGGGGGO...',
+  '...OggggggOHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO...',
+  '..OGgggggOSHHHHHHHHHHHHHHHHHHHHHHSOGGGGGGO..',
+  '..OGgggggOHHHHHHHHHHHHHHHHHHHHHHHHOGGGGGGO..',
+  '..OGggggOSHHHHHHHHHiHHHHHHHHHHHHHHSOGGGGGO..',
+  '..OGggggOhhhhHHHHHiHHHHHHiHHHHHhhhhOGGGGGO..',
+  '.OGGgggOShhhhHHHHiHHHHHHiHHHHHHhhhhSOGGGGGO.',
+  '.OGGGggOShhhhHHHiHHHHHHiHHHHHHHhhhhSOGGGGGO.',
+  '.OGGGGGOShhhhHHiFHHHHFiHFHHHFiHhhhhSOGGGGGO.',
+  '.OGGGGGOShhhhHhHhHHFHFHHFHhHhHHhhhhSOGGGGGO.',
+  '.OGGGGGOhhhhhiFHFFHFiFHFFHFiFFhhhhhhOGGGGGO.',
+  '.OGGGGGOShhhhFFFFFHFFFHFFFFFFFhhhhhSOGGGGGO.',
+  '.OGGGGOSShhhhhFFFFiFFFFFFFFFFFhhhhhSSOGGGGO.',
+  '.OGGGGGOShhhhhFFFFFFFFFFFFFFFFhhhhhSOGGGGGO.',
+  'OGGGGGGOShhhhLLLLLFFFFFFFLLLLLhhhhhSOGGGGGGO',
+  'OGGGGGGOShhhhhFFFFFFFFFFFFFFFFhhhhhSOGGGGGGO',
+  'OGGGGGGOSShhhhFFFFFFFFFFFFFFFFhhhhSSOGGGGGGO',
+  'OGGGGGGOSShhhhFFFFFFFFfFFFFFFFhhhhSSOGGGGGGO',
+  'OGGGGGGOSSShhFBBFFFFFFFFFFFFBBFhhSSSOGGGGGGO',
+  'OGGGGGGGOSShhHfFFFFFFFFFFFFFFfHhhSSOGGGGGGGO',
+  'OGGGGGGGOSShhHfFFFFFMMMMFFFFFfHhhSSOGGGGGGGO',
+  'OGGGGGGGGOShhHHFFFFFFFFFFFFFFHHhhSOGGGGGGGGO',
+  'OGGGGGGGGOShhSHffffffffffffffHShhSOGGGGGGGGO',
+  'OGGGGGGGGGOhhSSHHffffffffffHHSShhOGGGGGGGGGO',
+  'OGGGGGGGGGGOSSSSSffffffffffSSSSSOGGGGGGGGGGO',
+  'OGGGGGGGGGGGOSSSSffFFFFFFffSSSSOGGGGGGGGGGGO',
+  'OGGGGGGGGGGGGOSSSffffffffffSSSOGGGGGGGGGGGGO',
+  'OGGGGGGGGGGGGGOSSffffffffffSSOGGGGGGGGGGGGGO',
+  'OGGGGGGJcCCCCCCCCSSSSSSSSSSCCCCCCCCcJGGGGGGO',
+  'OGGGGGJJcCCCCCCccJJJJJJJJJJccCCCCCCcJJGGGGGO',
+  'OGGGGGJcCCCCCCcJJJJJJJJJJJJJJcCCCCCCcJGGGGGO',
+  'OGGGGJJcCCCCCcJJJJJJJJJJJJJJJJcCCCCCcJJGGGGO',
+  'OGGGGJcccccccJJKKKKKKKjKKKKKKJJcccccccJGGGGO',
+  'OGGGJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJGGGO',
+  'OGGJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
+  'OGGJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJGGO',
+  'OGJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJGO',
+  'jGJJJJJJJJjjjjJKKKKKKKjKKKKKKJJJJJJJJJJJJJGj',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+  'JJJJJJJJJJJJJJJKKKKKKKjKKKKKKJJJJJJJJJJJJJJJ',
+]
+const PORTRAIT_PAL: Palette = {
+  O: 0x2e282c, G: 0x6b6066, g: 0x8a7e85, S: 0x3a3238,
+  H: 0xe8853a, h: 0xb55a22, i: 0xf7b067,
+  F: 0xf5d6b8, f: 0xdcab8c, B: 0xf0a08a, M: 0xb06060, L: 0x5a3220,
+  E: 0x7a3d12, e: 0xd98a3a, W: 0xffffff,
+  C: 0xe9e4de, c: 0xb5aea8, J: 0x56494f, j: 0x3b3237, K: 0x6e6068,
+}
+export const PORTRAIT_W = 44
+export const PORTRAIT_H = 56
+
 const BOT_PAL: Palette = { h: 0x5a3b2e, f: 0xf6d2b3, n: 0xdcb18f, E: 0x3fb8f0, e: 0xffffff, V: 0xb0555b, o: 0xd97757, s: 0xa8553a, c: 0xf4ece2, w: 0xf6d2b3, p: 0x3c4a7a, b: 0x2b2b30, T: 0xffd54a }
 // One block color per task, cycling: [face, light, dark].
 const BLOCK_COLORS: [number, number, number][] = [
@@ -372,7 +500,7 @@ function blockPal(level: number): Palette {
 }
 
 export const SCENE_W = 56
-export const SCENE_H = 20
+export const SCENE_H = 28
 const BOT_X = 3
 const BLOCK_X = 30
 const PX = 2
@@ -393,12 +521,12 @@ function plot(pixels: Pixels, rows: string[], x0: number, y0: number, pal: Palet
 export function scenePixels(s: Save, f: Fx, now: number, frame: 0 | 1): Pixels {
   const pixels: Pixels = new Array(SCENE_W * SCENE_H)
   const hitting = now - f.at < 400
-  plot(pixels, frame ? BOT_B : BOT_A, BOT_X, 1, BOT_PAL)
-  plot(pixels, blockRows(s.level, crackStage(s.hp, taskHp(s.level))), BLOCK_X, 1, blockPal(s.level))
+  plot(pixels, frame ? BOT_B : BOT_A, BOT_X, 5, BOT_PAL)
+  plot(pixels, blockRows(s.level, crackStage(s.hp, taskHp(s.level))), BLOCK_X, 5, blockPal(s.level))
   if (hitting) {
     const sp = { S: SPARK }
-    plot(pixels, ['SS..', '.SS.', '..SS', '.SS.', 'SS..'], BLOCK_X - 6, 5, sp)
-    if (f.isCrit) plot(pixels, ['..SS', '.SS.', 'SS..', '.SS.', '..SS'], BLOCK_X - 8, 11, sp)
+    plot(pixels, ['SS..', '.SS.', '..SS', '.SS.', 'SS..'], BLOCK_X - 6, 9, sp)
+    if (f.isCrit) plot(pixels, ['..SS', '.SS.', 'SS..', '.SS.', '..SS'], BLOCK_X - 8, 15, sp)
   }
   return pixels
 }
@@ -414,7 +542,7 @@ const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 // The desktop scene is two SVGs side by side: the bot, whose source never
 // changes (so its animation never restarts), and the block, redrawn on hits.
 export const SPLIT_X = 22
-const BOT_W = SPLIT_X * PX
+const BOT_W = PORTRAIT_W
 const BLOCK_W = (SCENE_W - SPLIT_X) * PX
 const SCENE_PX_H = SCENE_H * PX
 
@@ -430,13 +558,32 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
 
 const svgOpen = (w: number) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible" style="background:transparent">`
+// Horizontal runs of one color become one rect, which keeps the source small.
+function portraitRects(rows: string[], dx: number, only?: (x: number, y: number) => boolean): string {
+  let out = ''
+  rows.forEach((row, y) => {
+    let x = 0
+    while (x < row.length) {
+      const ch = row[x] ?? '.'
+      const c = PORTRAIT_PAL[ch]
+      if (c === undefined || (only && !only(x, y))) {
+        x++
+        continue
+      }
+      let w = 1
+      while (x + w < row.length && row[x + w] === ch && (!only || only(x + w, y))) w++
+      out += `<rect x="${x + dx}" y="${y}" width="${w}" height="1" fill="${hex(c)}"/>`
+      x += w
+    }
+  })
+  return out
+}
 function botBody(dx: number): string {
-  const f: Fx = { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }
-  const a = scenePixels(FRESH, f, 0, 0)
-  const b = scenePixels(FRESH, f, 0, 1)
+  // Frame A whole; the blink only redraws the cells that differ.
+  const differs = (x: number, y: number) => PORTRAIT_B[y]?.[x] !== PORTRAIT_A[y]?.[x]
   return (
-    `<g>${rects(a, 0, SPLIT_X, dx)}<animate attributeName="opacity" values="1;0" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>` +
-    `<g>${rects(b, 0, SPLIT_X, dx)}<animate attributeName="opacity" values="0;1" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>`
+    `<g>${portraitRects(PORTRAIT_A, dx)}</g>` +
+    `<g>${portraitRects(PORTRAIT_B, dx, differs)}<animate attributeName="opacity" values="0;1;0" keyTimes="0;0.94;0.99" dur="4.5s" calcMode="discrete" repeatCount="indefinite"/></g>`
   )
 }
 
@@ -466,7 +613,7 @@ export function blockSvg(s: Save, f: Fx, now: number): string {
 }
 // The whole scene in one SVG, for docs and tests.
 export function sceneSvg(s: Save, f: Fx, now: number): string {
-  return svgOpen(SCENE_W * PX) + botBody(0) + blockBody(s, f, now, 0) + '</svg>'
+  return svgOpen(PORTRAIT_W + BLOCK_W) + botBody(0) + `<g transform="translate(${PORTRAIT_W},0)">` + blockBody(s, f, now, SPLIT_X) + '</g></svg>'
 }
 
 // Terminal: the scene as a Raster of half blocks, two pixels per cell.
@@ -487,12 +634,14 @@ function base64(bytes: Uint8Array): string {
 // The terminal gets the scene at half size: each cell holds a 2×2 block of
 // pixels on top and another below, so the band stays five rows tall.
 export const CELL_W = SCENE_W / 2
-export const SCENE_ROWS = SCENE_H / 4
+export const SCENE_ROWS = 5
 export function sceneCells(s: Save, f: Fx, now: number): string {
   const pix = scenePixels(s, f, now, (Math.floor(now / 800) % 2) as 0 | 1)
+  const sy = SCENE_H / (SCENE_ROWS * 2)
   const at = (x: number, y: number): number | undefined => {
+    const py = Math.min(SCENE_H - 2, Math.floor(y * sy))
     for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
-      const c = pix[(y * 2 + dy) * SCENE_W + x * 2 + dx]
+      const c = pix[(py + dy) * SCENE_W + x * 2 + dx]
       if (c !== undefined) return c
     }
     return undefined
@@ -886,7 +1035,7 @@ export const register: Register = on => {
             <Text dimColor>{`   task ${s.level + 1} · sprint ${sprintOf(s.level)} · pays ${fmt(taskReward(s.level))} ✦`}</Text>
           </Text>
           <Text wrap="truncate-end">
-            <Text color={barColor}>{bar(done, Math.max(10, Math.min(40, columns - 20)))}</Text>
+            <Text color={barColor}>{bar(done, Math.max(10, Math.min(20, columns - 30)))}</Text>
             <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
           </Text>
           <Box flexDirection="row" paddingTop={1} columnGap={2}>
@@ -895,9 +1044,8 @@ export const register: Register = on => {
             {stat('⚡', fmt(power(s)), '/prompt')}
             {stat('✧', `${Math.round(critChance(s) * 100)}%`, `crit ×${CRIT_MULT}`)}
           </Box>
-          <Box flexDirection="row" columnGap={1} paddingTop={1}>
+          <Box paddingTop={1}>
             <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
-            <Text dimColor wrap="wrap">keys while the pane is focused: p prompt · 1-4 agents · m model · i infra · r e b g w tools · t train</Text>
           </Box>
         </Box>
 
