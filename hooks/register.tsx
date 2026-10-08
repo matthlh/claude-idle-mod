@@ -1,7 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Fx, GenId, Prefs, Save, ToolId } from '../types'
+import type { Fx, GenId, Mood, Prefs, Save, ToolId } from '../types'
+import { FRAMES, FRAME_SIZE } from './frames'
 
 // ── State ────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ export const save = atom({ plugin: 'token-tycoon', key: 'save' } as const, { ...
 export const fx = atom({ plugin: 'token-tycoon', key: 'fx' } as const, { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 } as Fx)
 const isHidden = atom({ plugin: 'token-tycoon', key: 'isHidden' } as const, false)
 const prefs = atom({ plugin: 'token-tycoon', key: 'prefs' } as const, { popups: true } as Prefs)
+// What the character is doing, set by the hooks; frames follow from it and fx.
+const mood = atom({ plugin: 'token-tycoon', key: 'mood' } as const, 'idle' as Mood)
 
 // ── The game ─────────────────────────────────────────────────────────────
 
@@ -337,191 +340,9 @@ const CRACKS: [number, number][][] = [
   [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
 ]
 export type Palette = Record<string, number>
-// The desktop character: a 44×56 portrait at one CSS pixel per cell, generated
-// from shape primitives by docs/portrait.py. A rests, B sways the hair, C blinks.
-const PORTRAIT_A = [
-  '............................................',
-  '............................................',
-  '............................................',
-  '................hHHHHHHHHHHh................',
-  '..............hHiHHHHHiHHHHHih..............',
-  '.............hHHHiHHHHHiHHHHHih.............',
-  '...........hiHHHHHiHHHHHiHHHHHiHh...........',
-  '..........hHHiHHHHHiHHHHHiHHHHHiHh..........',
-  '..........hHHHiHHHHHiHHHHHiHHHHHHh..........',
-  '.........hHHHHHiHHHHHiHHHHHiHHHHHHh.........',
-  '........hHHHHHHHiHHHHHiHHHHHiHHHHHHh........',
-  '........hHHHHHHHHiHHHHHiHHHHHiHHHHHh........',
-  '.......hHHHHHHHHHHHHHHHHHHHHHHHHHHHHh.......',
-  '.......hHHHHHHHHHHHFHHHHHHHHHHHHHHHHh.......',
-  '.......hHHHHHHHHFHHFHHHHFHHFHHHHHHHHh.......',
-  '.......hHHHHHFHHFHFFHHFHFHHFHFHFHHHHh.......',
-  '.......hHHHHHFHFFHFFFHFHFHFFHFHFHHHHHh......',
-  '......hHHHHHFFHFFHFFFHFFFHFFFFHFHHHHHh......',
-  '......hHHHHHFhHhhhFFFHFFFFhhhhhFHHHHHh......',
-  '......hHHHHHFFFFFFFFFFFFFFFFFFFFHHHHHh......',
-  '......hiHHHHFFFFFFFFFFFFFFFFFFFFHHiHHh......',
-  '......hHHHHHFFLLLLLFFFFFFFLLLLLFFHHHHh......',
-  '......hHHHHHLFEEEEFFFFFFFFEEEEFLHHHHHh......',
-  '.....hHHHHHHFEWWEEEFFFFFFEWWEEEFHHHHHHh.....',
-  '.....hHHHHHHFEEEEeEFFFFFFEEEEeEFHHHHHHh.....',
-  '.....hHHHHHHFEEEeEFFFFFFFEEEeEFFHHHHHHh.....',
-  '....hHHHHHHHHFEEEFFFFFFFFFEEEFFHHHHHHiHh....',
-  '....hHHHHiHHHFFFFFFFFFFFFFFFFFFHHHHHiHHh....',
-  '....hHHHiHHHHHfFFFFFFFFfFFFFFfHHHHHiHHHh....',
-  '...hHHHiHHHHHhffFFFFFFFfFFFFffhHHHiHHHHHh...',
-  '...hHHiHHHHHh.hfFFFFFFFFFFFFfh.hHHHHHHHHh...',
-  '...hhiHHHHHHh...fFFFFFFFFFFf...hHHHHHHHhh...',
-  '..hhhHHHHHHHh...ffFFMMMMFFff...hHHHHHHHhhh..',
-  '..hhhHHHHHHHh....fFFFFFFFFf....hHHHHHHHhhh..',
-  '.hhhhHHHHHHh.....ffFFFFFFff.....hHHHHHihhhh.',
-  '.hhhhHHHHHHh......ffffffff......hHHHHiHhhhh.',
-  '.hhhhHHHHiHh......ffffffff......hHHHiHHhhhh.',
-  '.hhhhHHHiHHh.....ffFFFFFFff.....hHHiHHHhhhh.',
-  '.hhhhHHiHHHh......fFFFFFFf......hHiHHHHhhhh.',
-  'hhhhhHiHHHh.......ffffffff......hHHHHHHhhhhh',
-  'hhhhhiHHHhjjJJJJJJffffffffJJJJJJhHHHHHHhhhhh',
-  'hhhhhHHHHhJJJJJJJJJffffffJJJJJJJhHHHHHHhhhhh',
-  'hhhhhHHHHhJJJJJJJJCCJJJJCCJJJJJJhHHHHhhhhhhh',
-  'hhhhhHHHHhJJJJJJJCCJJJJJJCCJJJJJhHHHhjjhhhhh',
-  'hhhhjhHHHhJJJJJJCCJJJJjJJJCCJJJJhHHHhJjjhhhh',
-  'hhjjJhHHHhJJJJJCCCJJJJjJJJCCCJJJhHHHhJJJjjhh',
-  'jjJJJhHHihJJJJCCCJJJJJjJJJJCCCJJhHHihJJJJJjj',
-  'jJJJJhHiHhJJJCCCJJJJJJjJJJJJCCCJhHiHhJJJJJJj',
-  'jJJJJhiHHhJJJCCJJJJJJJjJJJJJJCCJhHHHhJJJJJJj',
-  'jJJJJhHHHhJJJJJJJJJJJJjJJJJJJJJJhHHHhJJJJJJj',
-  'jJJJJhHHHhJJJJJJJJJJJJjJJJJJJJJJhHHHhJJJJJJj',
-  'jJJJJhhhhhJJJJJJJJJJJJjJJJJJJJJJhhhhhJJJJJJj',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-]
-const PORTRAIT_B = [
-  '............................................',
-  '............................................',
-  '............................................',
-  '................hHHHHHHHHHHh................',
-  '..............hHiHHHHHiHHHHHih..............',
-  '.............hHHHiHHHHHiHHHHHih.............',
-  '...........hiHHHHHiHHHHHiHHHHHiHh...........',
-  '..........hHHiHHHHHiHHHHHiHHHHHiHh..........',
-  '..........hHHHiHHHHHiHHHHHiHHHHHHh..........',
-  '.........hHHHHHiHHHHHiHHHHHiHHHHHHh.........',
-  '........hHHHHHHHiHHHHHiHHHHHiHHHHHHh........',
-  '........hHHHHHHHHiHHHHHiHHHHHiHHHHHh........',
-  '.......hHHHHHHHHHHHHHHHHHHHHHHHHHHHHh.......',
-  '.......hHHHHHHHHHHHFHHHHHHHHHHHHHHHHh.......',
-  '.......hHHHHHHHHFHHFHHHHFHHFHHHHHHHHh.......',
-  '.......hHHHHHFHHFHFFHHFHFHHFHFHFHHHHh.......',
-  '.......hHHHHHFHFFHFFFHFHFHFFHFHFHHHHHh......',
-  '......hHHHHHFFHFFHFFFHFFFHFFFFHFHHHHHh......',
-  '......hHHHHHFhHhhhFFFHFFFFhhhhhFHHHHHh......',
-  '......hHHHHHFFFFFFFFFFFFFFFFFFFFHHHHHh......',
-  '......hiHHHHFFFFFFFFFFFFFFFFFFFFHHiHHh......',
-  '......hHHHHHFFLLLLLFFFFFFFLLLLLFFHHHHh......',
-  '......hHHHHHLFEEEEFFFFFFFFEEEEFLHHHHHh......',
-  '.....hHHHHHHFEWWEEEFFFFFFEWWEEEFHHHHHHh.....',
-  '.....hHHHHHHFEEEEeEFFFFFFEEEEeEFHHHHHHh.....',
-  '.....hHHHHHHFEEEeEFFFFFFFEEEeEFFHHHHHHh.....',
-  '....hHHHHHHHHFEEEFFFFFFFFFEEEFFHHHHHHiHh....',
-  '....hHHHHiHHHFFFFFFFFFFFFFFFFFFHHHHHiHHh....',
-  '....hHHHiHHHHHfFFFFFFFFfFFFFFfHHHHHiHHHh....',
-  '...hHHHiHHHHHhffFFFFFFFfFFFFffhHHHiHHHHHh...',
-  '...hHHiHHHHHh.hfFFFFFFFFFFFFfh.hHHHHHHHHh...',
-  '....hiHHHHHHHh..fFFFFFFFFFFf..hHHHHHHHHh....',
-  '...hhHHHHHHHHh..ffFFMMMMFFff..hHHHHHHHHhh...',
-  '...hhHHHHHHHHh...fFFFFFFFFf...hHHHHHHHHhh...',
-  '..hhhHHHHHHHh....ffFFFFFFff....hHHHHHHihhh..',
-  '..hhhHHHHHHHh.....ffffffff.....hHHHHHiHhhh..',
-  '..hhhHHHHiHHh.....ffffffff.....hHHHHiHHhhh..',
-  '..hhhHHHiHHHh....ffFFFFFFff....hHHHiHHHhhh..',
-  '..hhhHHiHHHHh.....fFFFFFFf.....hHHiHHHHhhh..',
-  '.hhhhHiHHHHh......ffffffff......hHHHHHHhhhh.',
-  '.hhhhiHHHHhjJJJJJJffffffffJJJJJJjhHHHHHhhhh.',
-  '.hhhhHHHHHhJJJJJJJJffffffJJJJJJJJhHHHHHhhhh.',
-  '.hhhhhHHHHhJJJJJJJCCJJJJCCJJJJJJJhHHHHhhhhh.',
-  '.hhhhjhHHHhJJJJJJCCJJJJJJCCJJJJJJhHHHhjhhhh.',
-  '.hhhjjhHHHhJJJJJCCJJJJjJJJCCJJJJJhHHHhjjhhh.',
-  '.hjjJJhHHihJJJJCCCJJJJjJJJCCCJJJJhHHihJJjjh.',
-  'jjJJJJhHiHhJJJCCCJJJJJjJJJJCCCJJJhHiHhJJJJjj',
-  'jJJJJJhiHHhJJCCCJJJJJJjJJJJJCCCJJhiHHhJJJJJj',
-  'jJJJJJhHHHhJJCCJJJJJJJjJJJJJJCCJJhHHHhJJJJJj',
-  'jJJJJJhHHHhJJJJJJJJJJJjJJJJJJJJJJhHHHhJJJJJj',
-  'jJJJJJhHHHhJJJJJJJJJJJjJJJJJJJJJJhHHHhJJJJJj',
-  'jJJJJJhhhhhJJJJJJJJJJJjJJJJJJJJJJhhhhhJJJJJj',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-]
-const PORTRAIT_C = [
-  '............................................',
-  '............................................',
-  '............................................',
-  '................hHHHHHHHHHHh................',
-  '..............hHiHHHHHiHHHHHih..............',
-  '.............hHHHiHHHHHiHHHHHih.............',
-  '...........hiHHHHHiHHHHHiHHHHHiHh...........',
-  '..........hHHiHHHHHiHHHHHiHHHHHiHh..........',
-  '..........hHHHiHHHHHiHHHHHiHHHHHHh..........',
-  '.........hHHHHHiHHHHHiHHHHHiHHHHHHh.........',
-  '........hHHHHHHHiHHHHHiHHHHHiHHHHHHh........',
-  '........hHHHHHHHHiHHHHHiHHHHHiHHHHHh........',
-  '.......hHHHHHHHHHHHHHHHHHHHHHHHHHHHHh.......',
-  '.......hHHHHHHHHHHHFHHHHHHHHHHHHHHHHh.......',
-  '.......hHHHHHHHHFHHFHHHHFHHFHHHHHHHHh.......',
-  '.......hHHHHHFHHFHFFHHFHFHHFHFHFHHHHh.......',
-  '.......hHHHHHFHFFHFFFHFHFHFFHFHFHHHHHh......',
-  '......hHHHHHFFHFFHFFFHFFFHFFFFHFHHHHHh......',
-  '......hHHHHHFhHhhhFFFHFFFFhhhhhFHHHHHh......',
-  '......hHHHHHFFFFFFFFFFFFFFFFFFFFHHHHHh......',
-  '......hiHHHHFFFFFFFFFFFFFFFFFFFFHHiHHh......',
-  '......hHHHHHFFFFFFFFFFFFFFFFFFFFFHHHHh......',
-  '......hHHHHHFFFFFFFFFFFFFFFFFFFFHHHHHh......',
-  '.....hHHHHHHFFFFFFFFFFFFFFFFFFFFHHHHHHh.....',
-  '.....hHHHHHHFFFFFFFFFFFFFFFFFFFFHHHHHHh.....',
-  '.....hHHHHHHFLLLLLLFFFFFFLLLLLLFHHHHHHh.....',
-  '....hHHHHHHHHFFFFFFFFFFFFFFFFFFHHHHHHiHh....',
-  '....hHHHHiHHHFFFFFFFFFFFFFFFFFFHHHHHiHHh....',
-  '....hHHHiHHHHHfFFFFFFFFfFFFFFfHHHHHiHHHh....',
-  '...hHHHiHHHHHhffFFFFFFFfFFFFffhHHHiHHHHHh...',
-  '...hHHiHHHHHh.hfFFFFFFFFFFFFfh.hHHHHHHHHh...',
-  '...hhiHHHHHHh...fFFFFFFFFFFf...hHHHHHHHhh...',
-  '..hhhHHHHHHHh...ffFFMMMMFFff...hHHHHHHHhhh..',
-  '..hhhHHHHHHHh....fFFFFFFFFf....hHHHHHHHhhh..',
-  '.hhhhHHHHHHh.....ffFFFFFFff.....hHHHHHihhhh.',
-  '.hhhhHHHHHHh......ffffffff......hHHHHiHhhhh.',
-  '.hhhhHHHHiHh......ffffffff......hHHHiHHhhhh.',
-  '.hhhhHHHiHHh.....ffFFFFFFff.....hHHiHHHhhhh.',
-  '.hhhhHHiHHHh......fFFFFFFf......hHiHHHHhhhh.',
-  'hhhhhHiHHHh.......ffffffff......hHHHHHHhhhhh',
-  'hhhhhiHHHhjjJJJJJJffffffffJJJJJJhHHHHHHhhhhh',
-  'hhhhhHHHHhJJJJJJJJJffffffJJJJJJJhHHHHHHhhhhh',
-  'hhhhhHHHHhJJJJJJJJCCJJJJCCJJJJJJhHHHHhhhhhhh',
-  'hhhhhHHHHhJJJJJJJCCJJJJJJCCJJJJJhHHHhjjhhhhh',
-  'hhhhjhHHHhJJJJJJCCJJJJjJJJCCJJJJhHHHhJjjhhhh',
-  'hhjjJhHHHhJJJJJCCCJJJJjJJJCCCJJJhHHHhJJJjjhh',
-  'jjJJJhHHihJJJJCCCJJJJJjJJJJCCCJJhHHihJJJJJjj',
-  'jJJJJhHiHhJJJCCCJJJJJJjJJJJJCCCJhHiHhJJJJJJj',
-  'jJJJJhiHHhJJJCCJJJJJJJjJJJJJJCCJhHHHhJJJJJJj',
-  'jJJJJhHHHhJJJJJJJJJJJJjJJJJJJJJJhHHHhJJJJJJj',
-  'jJJJJhHHHhJJJJJJJJJJJJjJJJJJJJJJhHHHhJJJJJJj',
-  'jJJJJhhhhhJJJJJJJJJJJJjJJJJJJJJJhhhhhJJJJJJj',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-  'JJJJJJJJJJJJJJJJJJJJJJjJJJJJJJJJJJJJJJJJJJJJ',
-]
-const PORTRAIT_PAL: Palette = {
-  H: 0xe8853a, h: 0xb55a22, i: 0xf7b067,
-  F: 0xf5d6b8, f: 0xdcab8c, B: 0xf0a08a, M: 0xb06060, L: 0x4a2a1a,
-  E: 0x7a3d12, e: 0xd98a3a, W: 0xffffff,
-  C: 0xe9e4de, J: 0x56494f, j: 0x3b3237,
-}
-const PP = 1
-export const PORTRAIT_W = 44 * PP
-export const PORTRAIT_H = 56 * PP
+export const CHAR_PX = 56
+export const PORTRAIT_W = CHAR_PX
+export const PORTRAIT_H = CHAR_PX
 
 const BOT_PAL: Palette = { h: 0x5a3b2e, f: 0xf6d2b3, n: 0xdcb18f, E: 0x3fb8f0, e: 0xffffff, V: 0xb0555b, o: 0xd97757, s: 0xa8553a, c: 0xf4ece2, w: 0xf6d2b3, p: 0x3c4a7a, b: 0x2b2b30, T: 0xffd54a }
 // One block color per task, cycling: [face, light, dark].
@@ -617,34 +438,39 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
 const svgOpen = (w: number) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible" style="background:transparent">`
 // Horizontal runs of one color become one rect, which keeps the source small.
-function portraitRects(rows: string[], dx: number, only?: (x: number, y: number) => boolean): string {
-  let out = ''
-  rows.forEach((row, y) => {
-    let x = 0
-    while (x < row.length) {
-      const ch = row[x] ?? '.'
-      const c = PORTRAIT_PAL[ch]
-      if (c === undefined || (only && !only(x, y))) {
-        x++
-        continue
-      }
-      let w = 1
-      while (x + w < row.length && row[x + w] === ch && (!only || only(x + w, y))) w++
-      out += `<rect x="${(x + dx) * PP}" y="${y * PP}" width="${w * PP}" height="${PP}" fill="${hex(c)}"/>`
-      x += w
-    }
-  })
-  return out
+// Which frames a mood cycles through, and how long each shows.
+const F = { idle: 0, eyesClosed: 1, lookUp: 2, blink: 3, typing: 4, thinking: 5, sleep1: 6, sleep2: 7, oops: 8, cheer1: 9, cheer2: 10, over1: 11, over2: 12, hit: 13 }
+function moodFrames(md: Mood, f: Fx, now: number): { frames: number[]; dur: number } {
+  if (now - f.at < 500 && f.dmg > 0 && !f.isCrit) return { frames: [F.hit], dur: 1 }
+  if (now - f.at < 1200 && f.isCrit) return { frames: [F.over1, F.over2], dur: 0.3 }
+  if (f.cleared && now - f.at < 1500) return { frames: [F.cheer1, F.cheer2], dur: 0.5 }
+  if (md === 'working') return { frames: [F.typing, F.typing, F.thinking], dur: 0.7 }
+  if (md === 'sleep') return { frames: [F.sleep1, F.sleep2], dur: 1.2 }
+  if (md === 'oops') return { frames: [F.oops], dur: 1 }
+  return { frames: [F.idle, F.idle, F.blink, F.idle, F.lookUp, F.idle, F.eyesClosed], dur: 0.9 }
 }
+function frameImage(i: number, dx: number): string {
+  const b64 = FRAMES[i] ?? FRAMES[0] ?? ''
+  return `<image x="${dx}" y="0" width="${CHAR_PX}" height="${CHAR_PX}" href="data:image/png;base64,${b64}"/>`
+}
+// Each frame is a group shown during its slot of one repeating cycle.
+function botBodyFor(md: Mood, f: Fx, now: number, dx: number): string {
+  const { frames, dur } = moodFrames(md, f, now)
+  if (frames.length === 1) return `<g>${frameImage(frames[0]!, dx)}</g>`
+  const total = frames.length * dur
+  return frames
+    .map((fi, i) => {
+      const a = i / frames.length
+      const b = (i + 1) / frames.length
+      const values = i === 0 ? '1;0' : b >= 0.999 ? '0;1' : '0;1;0'
+      const keyTimes = i === 0 ? `0;${b.toFixed(3)}` : b >= 0.999 ? `0;${a.toFixed(3)}` : `0;${a.toFixed(3)};${b.toFixed(3)}`
+      return `<g>${frameImage(fi, dx)}<animate attributeName="opacity" values="${values}" keyTimes="${keyTimes}" dur="${total.toFixed(2)}s" calcMode="discrete" repeatCount="indefinite"/></g>`
+    })
+    .join('')
+}
+// The docs and the tests still get a frame without a mood.
 function botBody(dx: number): string {
-  // A and B alternate (a bob with the hair swaying); the blink only redraws
-  // the cells that differ from A, over the top, for a moment every few seconds.
-  const blink = (x: number, y: number) => PORTRAIT_C[y]?.[x] !== PORTRAIT_A[y]?.[x]
-  return (
-    `<g>${portraitRects(PORTRAIT_A, dx)}<animate attributeName="opacity" values="1;0" dur="2.4s" calcMode="discrete" repeatCount="indefinite"/></g>` +
-    `<g>${portraitRects(PORTRAIT_B, dx)}<animate attributeName="opacity" values="0;1" dur="2.4s" calcMode="discrete" repeatCount="indefinite"/></g>` +
-    `<g>${portraitRects(PORTRAIT_C, dx, blink)}<animate attributeName="opacity" values="0;1;0" keyTimes="0;0.95;0.99" dur="3.7s" calcMode="discrete" repeatCount="indefinite"/></g>`
-  )
+  return botBodyFor('idle', { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }, 1e9, dx)
 }
 
 function blockBody(s: Save, f: Fx, now: number, dx: number): string {
@@ -663,10 +489,9 @@ function blockBody(s: Save, f: Fx, now: number, dx: number): string {
   return `<g>${rects(pix, SPLIT_X, SCENE_W, dx)}${shake}</g>${pop}`
 }
 
-let botCache: string | null = null
-export function botSvg(): string {
-  if (!botCache) botCache = svgOpen(BOT_W) + botBody(0) + '</svg>'
-  return botCache
+export function botSvg(md: Mood = 'idle', f?: Fx, now = 0): string {
+  const body = f ? botBodyFor(md, f, now, 0) : botBody(0)
+  return svgOpen(BOT_W) + body + '</svg>'
 }
 export function blockSvg(s: Save, f: Fx, now: number): string {
   return svgOpen(BLOCK_W) + blockBody(s, f, now, SPLIT_X) + '</svg>'
@@ -734,6 +559,17 @@ export function bar(frac: number, width: number): string {
 function ignorePress() {}
 
 let dirty = false
+let lastActivity = 0
+let oopsUntil = 0
+const SLEEP_AFTER_MS = 5 * 60_000
+
+async function setMood($: EngineInterface, md: Mood) {
+  if ((await read($, mood)) !== md) await update($, mood, () => md)
+}
+async function touch($: EngineInterface, md: Mood) {
+  lastActivity = await $.clock.now()
+  await setMood($, md)
+}
 // Seconds played since the last save, folded in by persist.
 let playedAcc = 0
 
@@ -844,6 +680,7 @@ export const register: Register = on => {
     const p = (await $.store.get('prefs')) as Partial<Prefs> | undefined
     if (p) await update($, prefs, x => ({ ...x, ...p }))
     const now = await $.clock.now()
+    lastActivity = now
     let s: Save = {
       ...FRESH,
       ...(stored ?? {}),
@@ -869,6 +706,10 @@ export const register: Register = on => {
       ticks++
       playedAcc += 1000
       dirty = true
+      const t = await $.clock.now()
+      const md = await read($, mood)
+      if (md === 'oops' && t > oopsUntil) await setMood($, 'idle')
+      else if (md === 'idle' && lastActivity && t - lastActivity > SLEEP_AFTER_MS) await setMood($, 'sleep')
       const cur = await read($, save)
       const rate = dps(cur)
       if (rate > 0) {
@@ -887,11 +728,26 @@ export const register: Register = on => {
 
   on('tool.call', async ($, e, next) => {
     await hit($, 'tool').catch(() => {})
+    await touch($, 'working').catch(() => {})
+    const res = await next(e)
+    if (res && typeof res === 'object' && 'is_error' in res && (res as { is_error?: boolean }).is_error) {
+      oopsUntil = (await $.clock.now()) + 4000
+      await setMood($, 'oops').catch(() => {})
+    }
+    return res
+  })
+
+  on('prompt.submit', async ($, e, next) => {
+    await touch($, 'working')
     return next(e)
   })
 
   on('turn.complete', async ($, e, next) => {
     if (!e.isAborted) await hit($, 'turn')
+    if (e.reason === 'error') {
+      oopsUntil = (await $.clock.now()) + 4000
+      await touch($, 'oops')
+    } else await touch($, 'idle')
     await persist($)
     return next(e)
   })
@@ -907,6 +763,8 @@ export const register: Register = on => {
 
   on('ui.press', { plugin: 'token-tycoon', element: 'prompt' }, async $ => {
     await hit($, 'click')
+    if ((await read($, mood)) === 'sleep') await touch($, 'idle')
+    else lastActivity = await $.clock.now()
     return { element: 'prompt' }
   })
   on('ui.press', { plugin: 'token-tycoon', element: 'shop' }, async $ => {
@@ -978,6 +836,7 @@ export const register: Register = on => {
     const now = await $.clock.now()
     const s = await read($, save)
     const f = await read($, fx)
+    const md: Mood = e.props.isWorking && (await read($, mood)) !== 'sleep' ? 'working' : await read($, mood)
     const max = taskHp(s.level)
     const done = 1 - s.hp / max
     const columns = e.viewport?.columns ?? 80
@@ -988,7 +847,7 @@ export const register: Register = on => {
         <Raster key="scene" columns={CELL_W} rows={SCENE_ROWS} cells={sceneCells(s, f, now)} />
       ) : (
         <Box flexDirection="row" flexShrink={0}>
-          <Svg source={botSvg()} alt="a little bot" width={BOT_W} height={SCENE_PX_H} isInteractive />
+          <Svg source={botSvg(md, f, now)} alt={`the coder, ${md}`} width={BOT_W} height={SCENE_PX_H} isInteractive />
           <Svg source={blockSvg(s, f, now)} alt={`${taskName(s.level)} at ${Math.round(done * 100)}%`} width={BLOCK_W} height={SCENE_PX_H} isInteractive />
         </Box>
       )

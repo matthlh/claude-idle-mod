@@ -29,9 +29,10 @@ export type Fx = {
 }
 
 export type Prefs = { popups: boolean }
+export type Mood = 'idle' | 'working' | 'sleep' | 'oops'
 
 declare module 'claude-code' {
   interface PluginState {
-    'token-tycoon': { save: Save; fx: Fx; isHidden: boolean; prefs: Prefs }
+    'token-tycoon': { save: Save; fx: Fx; isHidden: boolean; prefs: Prefs; mood: Mood }
   }
 }
