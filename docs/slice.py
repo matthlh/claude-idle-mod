@@ -3,7 +3,7 @@ from PIL import Image
 src, out = sys.argv[1], sys.argv[2]
 im = Image.open(src).convert('RGBA')
 W, H = im.size
-COLS, ROWS, SIZE = 7, 2, 96
+COLS, ROWS, SIZE = 7, 2, int(os.environ.get("SIZE", "96"))
 cw, rh = W / COLS, H / ROWS
 # white -> transparent, with a soft edge for near-white
 px = im.load()

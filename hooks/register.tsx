@@ -340,7 +340,7 @@ const CRACKS: [number, number][][] = [
   [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
 ]
 export type Palette = Record<string, number>
-export const CHAR_PX = 56
+export const CHAR_PX = 84
 export const PORTRAIT_W = CHAR_PX
 export const PORTRAIT_H = CHAR_PX
 
@@ -382,7 +382,7 @@ export const SCENE_W = 56
 export const SCENE_H = 28
 const BOT_X = 3
 const BLOCK_X = 30
-const PX = 2
+const PX = 3
 
 type Pixels = (number | undefined)[]
 function plot(pixels: Pixels, rows: string[], x0: number, y0: number, pal: Palette) {
@@ -435,29 +435,32 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
   return out
 }
 
+const CARD = '#1e1e1e'
 const svgOpen = (w: number) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible" style="background:transparent">`
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" style="background:${CARD}"><rect width="100%" height="100%" fill="${CARD}"/>`
 // Horizontal runs of one color become one rect, which keeps the source small.
 // Each state is one steady base frame, with other frames shown only during
 // short slots of a cycle (a blink, a glance up), plus a smooth motion on top.
 const F = { idle: 0, eyesClosed: 1, lookUp: 2, blink: 3, typing: 4, thinking: 5, sleep1: 6, sleep2: 7, oops: 8, cheer1: 9, cheer2: 10, over1: 11, over2: 12, hit: 13 }
 type Slot = [number, number]
 type Scene = { base: number; cycle: number; extras: { frame: number; slots: Slot[] }[]; motion: string }
-const bob = (px: number, dur: number) =>
-  `<animateTransform attributeName="transform" type="translate" values="0 0;0 ${-px};0 0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" dur="${dur}s" repeatCount="indefinite"/>`
+// A bob with a little squash and stretch, anchored at the feet.
+const bob = (px: number, dur: number, squash = 0.02) =>
+  `<animateTransform attributeName="transform" type="translate" values="0 0;0 ${-px};0 0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" dur="${dur}s" repeatCount="indefinite" additive="sum"/>` +
+  `<animateTransform attributeName="transform" type="scale" values="1 1;${1 - squash} ${1 + squash};1 1" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" dur="${dur}s" repeatCount="indefinite" additive="sum"/>`
 const shake = (px: number, dur: number) =>
   `<animateTransform attributeName="transform" type="translate" values="0 0;${px} 0;0 0;${-px} 0;0 0" dur="${dur}s" repeatCount="indefinite"/>`
 function sceneFor(md: Mood, f: Fx, now: number): Scene {
   if (now - f.at < 500 && f.dmg > 0 && !f.isCrit)
-    return { base: F.hit, cycle: 1, extras: [], motion: `<animateTransform attributeName="transform" type="translate" values="0 0;3 -2;0 0" dur="0.3s" repeatCount="1"/>` }
+    return { base: F.hit, cycle: 1, extras: [], motion: `<animateTransform attributeName="transform" type="scale" values="1 1;1.08 0.9;0.97 1.04;1 1" dur="0.35s" repeatCount="1"/>` }
   if (now - f.at < 1200 && f.isCrit)
     return { base: F.over1, cycle: 0.4, extras: [{ frame: F.over2, slots: [[0.5, 1]] }], motion: shake(1, 0.16) }
   if (f.cleared && now - f.at < 1500)
-    return { base: F.cheer1, cycle: 0.7, extras: [{ frame: F.cheer2, slots: [[0.5, 1]] }], motion: bob(3, 0.35) }
+    return { base: F.cheer1, cycle: 0.7, extras: [{ frame: F.cheer2, slots: [[0.5, 1]] }], motion: bob(5, 0.35, 0.06) }
   if (md === 'working')
-    return { base: F.typing, cycle: 6, extras: [{ frame: F.thinking, slots: [[0.55, 0.8]] }], motion: bob(1, 0.9) }
+    return { base: F.typing, cycle: 6, extras: [{ frame: F.thinking, slots: [[0.55, 0.8]] }], motion: bob(1.5, 0.8, 0.025) }
   if (md === 'sleep')
-    return { base: F.sleep1, cycle: 3, extras: [{ frame: F.sleep2, slots: [[0.5, 1]] }], motion: bob(0.7, 3) }
+    return { base: F.sleep1, cycle: 3, extras: [{ frame: F.sleep2, slots: [[0.5, 1]] }], motion: bob(1, 3, 0.015) }
   if (md === 'oops')
     return { base: F.oops, cycle: 1, extras: [], motion: shake(0.6, 0.5) }
   return {
@@ -466,9 +469,8 @@ function sceneFor(md: Mood, f: Fx, now: number): Scene {
     extras: [
       { frame: F.blink, slots: [[0.22, 0.23], [0.58, 0.59], [0.86, 0.87]] },
       { frame: F.lookUp, slots: [[0.4, 0.5]] },
-      { frame: F.eyesClosed, slots: [[0.7, 0.78]] },
     ],
-    motion: bob(1, 2.6),
+    motion: bob(2, 2.4, 0.03),
   }
 }
 // A frame is a set of paths in FRAME_SIZE units, scaled to the character box.
@@ -492,7 +494,7 @@ function botBodyFor(md: Mood, f: Fx, now: number, dx: number): string {
   const all = sc.extras.flatMap(x => x.slots)
   let out = `<g>${frameImage(sc.base, dx)}${all.length ? stepped(all, sc.cycle, 0) : ''}</g>`
   for (const x of sc.extras) out += `<g>${frameImage(x.frame, dx)}${stepped(x.slots, sc.cycle, 1)}</g>`
-  return `<g>${out}${sc.motion}</g>`
+  return `<g transform-origin="${CHAR_PX / 2} ${CHAR_PX}" style="transform-origin:${CHAR_PX / 2}px ${CHAR_PX}px">${out}${sc.motion}</g>`
 }
 // The docs and the tests still get a frame without a mood.
 function botBody(dx: number): string {
@@ -598,6 +600,8 @@ async function touch($: EngineInterface, md: Mood) {
 }
 // Seconds played since the last save, folded in by persist.
 let playedAcc = 0
+// Passive damage not yet written to the state (see the tick).
+let pending = 0
 
 export function fmtTime(ms: number): string {
   const m = Math.floor(ms / 60_000)
@@ -632,7 +636,8 @@ async function hit($: EngineInterface, kind: 'click' | 'tool' | 'turn') {
   const isCrit = kind === 'turn' || Math.random() < critChance(s0)
   const twice = s0.tools.bash && Math.random() < 0.2
   const dmg = power(s0) * (isCrit ? CRIT_MULT : 1) * (twice ? 2 : 1)
-  const r = damage(s0, dmg)
+  const r = damage(s0, dmg + pending)
+  pending = 0
   const s = {
     ...r.s,
     clicks: s0.clicks + (kind === 'click' ? 1 : 0),
@@ -739,11 +744,14 @@ export const register: Register = on => {
       const cur = await read($, save)
       const rate = dps(cur)
       if (rate > 0) {
-        const r = damage(cur, rate)
-        await commit($, r.s)
-        if (r.cleared > 0) {
-          const t = await $.clock.now()
-          await update($, fx, () => ({ at: t - 400, dmg: 0, isCrit: false, cleared: r.last, reward: r.reward }))
+        pending += rate
+        const r = damage(cur, pending)
+        // Redraw only every few seconds, or right away when a task clears, so
+        // the character's animation isn't restarted every second.
+        if (r.cleared > 0 || ticks % 4 === 0) {
+          pending = 0
+          await commit($, r.s)
+          if (r.cleared > 0) await update($, fx, () => ({ at: t - 400, dmg: 0, isCrit: false, cleared: r.last, reward: r.reward }))
         }
       }
       if (dirty && ticks % 15 === 0) await persist($)
