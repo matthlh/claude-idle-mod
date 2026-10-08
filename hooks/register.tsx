@@ -205,40 +205,40 @@ export function nextTier(list: Tier[], at: number): Tier | null {
 // as its HP drops and changes color with each task.
 
 const BOT_A = [
-  '.......kk.......',
-  '.......kk.......',
+  '..t....kk....t..',
+  '...t...kk...t...',
   '....hhhhhhhh....',
   '...hhhhhhhhhh...',
-  '...hVVVVVVVVh...',
-  '...hVEEVVEEVh...',
-  '...hVVVVVVVVh...',
-  '...hhhhhhhhhh...',
-  '....dddddddd....',
-  '......bbbb......',
-  '...wwbbbbbbww...',
+  '..hhEEhhhhEEhh..',
+  '..hhEehhhhEehh..',
+  '..hhEEhhhhEEhh..',
+  '..hhhhhhhhhhhh..',
+  '...hhhhVVhhhh...',
+  '....hhhhhhhh....',
+  '......dddd......',
+  '...wwbbccbbww...',
   '..w.bbbccbbb.w..',
-  '..w.bbbccbbb.w..',
-  '....bbbbbbbb....',
+  '..w.bbbbbbbb.w..',
   '....ssssssss....',
   '.....ll..ll.....',
   '.....ll..ll.....',
   '....lll..lll....',
 ]
 const BOT_B = [
-  '.......kk.....tt',
-  '.......kk.....tt',
-  '....hhhhhhhh..t.',
-  '...hhhhhhhhhh.t.',
-  '...hVVVVVVVVh.w.',
-  '...hVEEVVEEVhww.',
-  '...hVVVVVVVVhw..',
-  '...hhhhhhhhhhw..',
-  '....ddddddddw...',
-  '......bbbb.w....',
-  '...wwbbbbbbw....',
+  '..t....kk....t.T',
+  '...t...kk...t.T.',
+  '....hhhhhhhh..T.',
+  '...hhhhhhhhhh.w.',
+  '..hhEEhhhhEEhhw.',
+  '..hhEehhhhEehww.',
+  '..hhEEhhhhEEhw..',
+  '..hhhhhhhhhhhw..',
+  '...hhhhVVhhhhw..',
+  '....hhhhhhhhw...',
+  '......dddd.w....',
+  '...wwbbccbbw....',
   '..w.bbbccbbb....',
-  '..w.bbbccbbb....',
-  '....bbbbbbbb....',
+  '..w.bbbbbbbb....',
   '....ssssssss....',
   '.....ll..ll.....',
   '.....ll..ll.....',
@@ -336,7 +336,7 @@ const CRACKS: [number, number][][] = [
   [[17, 13], [17, 14], [3, 10], [3, 11], [11, 13], [11, 14], [12, 15], [20, 7], [21, 8], [6, 12], [5, 13], [16, 3], [17, 2]],
 ]
 export type Palette = Record<string, number>
-const BOT_PAL: Palette = { k: 0xd97757, h: 0xd6d1c7, d: 0x9c978e, V: 0x2f3a4a, E: 0x5fd3ff, b: 0xd97757, s: 0xa8553a, c: 0x7ff0ff, w: 0x8a8580, l: 0x6f6a64, t: 0xffd54a }
+const BOT_PAL: Palette = { k: 0xd97757, t: 0xffd54a, T: 0xffd54a, h: 0xeeeae2, d: 0x9c978e, V: 0x3a3a46, E: 0x3fb8f0, e: 0xffffff, b: 0xd97757, s: 0xa8553a, c: 0x7ff0ff, w: 0x8a8580, l: 0x6f6a64 }
 // One block color per task, cycling: [face, light, dark].
 const BLOCK_COLORS: [number, number, number][] = [
   [0xd97757, 0xf0a284, 0x9a4d33], // Claude orange
@@ -427,8 +427,18 @@ function rects(pix: Pixels, x0: number, x1: number, dx: number): string {
   return out
 }
 
+const CARD = '#17171b'
 const svgOpen = (w: number) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${SCENE_PX_H}" width="${w}" height="${SCENE_PX_H}" shape-rendering="crispEdges" overflow="visible" style="background:transparent">`
+// A dark card behind the art, rounded on the outer corners only, so the two
+// halves meet without a seam.
+const card = (w: number, side: 'left' | 'right' | 'both') => {
+  const h = SCENE_PX_H
+  const r = 6
+  const tl = side !== 'right' ? r : 0
+  const tr = side !== 'left' ? r : 0
+  return `<path fill="${CARD}" d="M${tl},0 H${w - tr} ${tr ? `A${r},${r} 0 0 1 ${w},${r}` : ''} V${h - tr} ${tr ? `A${r},${r} 0 0 1 ${w - tr},${h}` : ''} H${tl} ${tl ? `A${r},${r} 0 0 1 0,${h - tl}` : ''} V${tl} ${tl ? `A${r},${r} 0 0 1 ${tl},0` : ''} Z"/>`
+}
 
 function botBody(dx: number): string {
   const f: Fx = { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 }
@@ -458,15 +468,15 @@ function blockBody(s: Save, f: Fx, now: number, dx: number): string {
 
 let botCache: string | null = null
 export function botSvg(): string {
-  if (!botCache) botCache = svgOpen(BOT_W) + botBody(0) + '</svg>'
+  if (!botCache) botCache = svgOpen(BOT_W) + card(BOT_W, 'left') + botBody(0) + '</svg>'
   return botCache
 }
 export function blockSvg(s: Save, f: Fx, now: number): string {
-  return svgOpen(BLOCK_W) + blockBody(s, f, now, SPLIT_X) + '</svg>'
+  return svgOpen(BLOCK_W) + card(BLOCK_W, 'right') + blockBody(s, f, now, SPLIT_X) + '</svg>'
 }
 // The whole scene in one SVG, for docs and tests.
 export function sceneSvg(s: Save, f: Fx, now: number): string {
-  return svgOpen(SCENE_W * PX) + botBody(0) + blockBody(s, f, now, 0) + '</svg>'
+  return svgOpen(SCENE_W * PX) + card(SCENE_W * PX, 'both') + botBody(0) + blockBody(s, f, now, 0) + '</svg>'
 }
 
 // Terminal: the scene as a Raster of half blocks, two pixels per cell.
@@ -789,7 +799,7 @@ export const register: Register = on => {
     const COL = narrow ? 9 : 12
     const BAR = COL * 3 - 5
     const col = (icon: string, value: string, label: string, color?: string) => (
-      <Box width={COL} flexShrink={0}>
+      <Box width={COL} flexGrow={1} flexShrink={1}>
         <Text wrap="truncate">
           <Text color={color} bold={color === 'yellow'}>{`${icon}${value}`}</Text>
           <Text dimColor>{label}</Text>
@@ -799,7 +809,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" paddingX={1} rowGap={1}>
-        <Box flexDirection="row" alignItems="center" columnGap={3}>
+        <Box flexDirection="row" alignItems="flex-start" columnGap={3}>
           {art}
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">
@@ -848,36 +858,29 @@ export const register: Register = on => {
         {children}
       </Box>
     )
-    // One shop row: a button, the price, and what it does.
+    // One shop row: a button with its price, and what it does beneath.
     const row = (key: string, label: string, hotkey: string, cost: number, detail: string) => {
       const can = s.tokens >= cost
       return (
-        <Box flexDirection="row" columnGap={2} alignItems="center">
-          <Box width={18} flexShrink={0}>
+        <Box flexDirection="column" paddingBottom={1}>
+          <Box flexDirection="row" columnGap={2} alignItems="center">
             <Button key={key} label={label} hotkey={hotkey} dimColor={!can} onPress={ignorePress} />
-          </Box>
-          <Box width={16} flexShrink={0}>
             {can
               ? <Text color="yellow">{`${fmt(cost)} ✦`}</Text>
-              : <Text dimColor>{`${fmt(cost)} ✦ (need ${fmt(cost - s.tokens)})`}</Text>}
+              : <Text dimColor>{`${fmt(cost)} ✦ · need ${fmt(cost - s.tokens)} more`}</Text>}
           </Box>
-          <Text dimColor={!can} wrap="truncate-end">{detail}</Text>
+          <Text dimColor wrap="wrap">{`  ${detail}`}</Text>
         </Box>
       )
     }
     const owned = (label: string, detail: string) => (
-      <Box flexDirection="row" columnGap={2}>
-        <Box width={18} flexShrink={0}>
-          <Text color="green">{`✓ ${label}`}</Text>
-        </Box>
-        <Box width={9} flexShrink={0}>
-          <Text dimColor>owned</Text>
-        </Box>
-        <Text dimColor wrap="truncate-end">{detail}</Text>
+      <Box flexDirection="column" paddingBottom={1}>
+        <Text color="green">{`✓ ${label}`}<Text dimColor>{'  owned'}</Text></Text>
+        <Text dimColor wrap="wrap">{`  ${detail}`}</Text>
       </Box>
     )
     const stat = (icon: string, value: string, label: string, color?: string) => (
-      <Box flexDirection="column" width={16}>
+      <Box flexDirection="column" flexGrow={1}>
         <Text>
           <Text color={color} bold>{`${icon} ${value}`}</Text>
         </Text>
@@ -896,7 +899,7 @@ export const register: Register = on => {
             <Text color={barColor}>{bar(done, Math.max(10, Math.min(40, columns - 20)))}</Text>
             <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
           </Text>
-          <Box flexDirection="row" paddingTop={1} columnGap={2} flexWrap="wrap">
+          <Box flexDirection="row" paddingTop={1} columnGap={2}>
             {stat('✦', fmt(s.tokens), 'tokens', 'yellow')}
             {stat('▲', `${fmt(dps(s))}`, '/sec', 'green')}
             {stat('⚡', fmt(power(s)), '/prompt')}
@@ -904,7 +907,7 @@ export const register: Register = on => {
           </Box>
           <Box flexDirection="row" columnGap={1} paddingTop={1}>
             <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
-            <Text dimColor>keys while the pane is focused: p prompt · 1-4 agents · m model · i infra · r e b g w tools · t train</Text>
+            <Text dimColor wrap="wrap">keys while the pane is focused: p prompt · 1-4 agents · m model · i infra · r e b g w tools · t train</Text>
           </Box>
         </Box>
 
@@ -917,10 +920,10 @@ export const register: Register = on => {
 
         {section('Upgrades', [
           nextModel
-            ? row('buy-model', `Model → ${nextModel.label}`, 'm', nextModel.cost, `prompts ×${nextModel.mult}, now ${modelAt(s.model).label} ×${modelAt(s.model).mult}`)
+            ? row('buy-model', `Model → ${nextModel.label}`, 'm', nextModel.cost, `prompts ×${nextModel.mult} (now ×${modelAt(s.model).mult})`)
             : owned(`Model: ${modelAt(s.model).label}`, `prompts ×${modelAt(s.model).mult}, the best there is`),
           nextInfra
-            ? row('buy-infra', `Infra → ${nextInfra.label}`, 'i', nextInfra.cost, `agents ×${nextInfra.mult}, now ${infraAt(s.infra).label} ×${infraAt(s.infra).mult}`)
+            ? row('buy-infra', `Infra → ${nextInfra.label}`, 'i', nextInfra.cost, `agents ×${nextInfra.mult} (now ×${infraAt(s.infra).mult})`)
             : owned(`Infra: ${infraAt(s.infra).label}`, `agents ×${infraAt(s.infra).mult}, the best there is`),
         ])}
 
@@ -929,26 +932,24 @@ export const register: Register = on => {
         {section('Train a new model', [
           pts >= 1 ? (
             <Box flexDirection="row" columnGap={2} alignItems="center">
-              <Box width={18} flexShrink={0}>
-                <Button key="train" label={`Train (+${pts})`} hotkey="t" variant="primary" onPress={ignorePress} />
-              </Box>
-              <Text dimColor wrap="truncate-end">{`reset run · ×${prestigeMult(s.points + pts)} forever`}</Text>
+              <Button key="train" label={`Train (+${pts})`} hotkey="t" variant="primary" onPress={ignorePress} />
+              <Text dimColor wrap="wrap">{`reset run · ×${prestigeMult(s.points + pts)} forever`}</Text>
             </Box>
           ) : (
-            <Text dimColor wrap="truncate-end">{`${fmt(s.earned)} / ${fmt(nextPointAt)} ✦ this run`}</Text>
+            <Text dimColor wrap="wrap">{`${fmt(s.earned)} / ${fmt(nextPointAt)} ✦ this run`}</Text>
           ),
           <Text dimColor>{`${s.trained} trained · ${s.points} pts · ×${prestigeMult(s.points)}`}</Text>,
         ])}
 
         {section('Stats', [
-          <Box flexDirection="row" columnGap={2} flexWrap="wrap">
+          <Box flexDirection="row" columnGap={2}>
             {stat('✦', fmt(s.lifetime), 'gathered', 'yellow')}
             {stat('◷', fmtTime((s.played ?? 0) + playedAcc), 'played')}
             {stat('⚡', fmt(s.clicks), 'prompts')}
             {stat('✓', fmt(s.cleared), 'cleared')}
           </Box>,
-          <Text dimColor wrap="truncate-end">{`${fmt(s.bonusHits)} free hits from real work`}</Text>,
-          <Text dimColor wrap="truncate-end">{`tool call = free hit · turn = crit · offline ½ pace, ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h max`}</Text>,
+          <Text dimColor wrap="wrap">{`${fmt(s.bonusHits)} free hits from real work`}</Text>,
+          <Text dimColor wrap="wrap">{`tool call = free hit · turn = crit · offline ½ pace, ${OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h max`}</Text>,
           <Box paddingTop={1}>
             <Button key="popups" label={`Popups: ${p.popups ? 'On' : 'Off'}`} onPress={ignorePress} />
           </Box>,
