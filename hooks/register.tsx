@@ -1058,16 +1058,20 @@ export const register: Register = on => {
       </Box>
     )
     // One shop row: a button with its price, and what it does beneath.
+    // Affordable: a button and a yellow price. Not yet: plain dim text, no
+    // button at all, so nothing lights up under the pointer.
     const row = (key: string, label: string, hotkey: string, cost: number, detail: string) => {
       const can = s.tokens >= cost
       return (
         <Box flexDirection="column" paddingBottom={1}>
-          <Box flexDirection="row" columnGap={2} alignItems="center">
-            <Button key={key} label={label} hotkey={hotkey} dimColor={!can} onPress={ignorePress} />
-            {can
-              ? <Text color="yellow">{`${fmt(cost)} ✦`}</Text>
-              : <Text dimColor>{`${fmt(cost)} ✦ · need ${fmt(cost - s.tokens)} more`}</Text>}
-          </Box>
+          {can ? (
+            <Box flexDirection="row" columnGap={2} alignItems="center">
+              <Button key={key} label={label} hotkey={hotkey} onPress={ignorePress} />
+              <Text color="yellow" bold>{`${fmt(cost)} ✦`}</Text>
+            </Box>
+          ) : (
+            <Text dimColor>{`  ${label}   ${fmt(cost)} ✦`}</Text>
+          )}
           <Text dimColor wrap="wrap">{`  ${detail}`}</Text>
         </Box>
       )
