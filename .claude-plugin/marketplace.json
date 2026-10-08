@@ -1,0 +1,6 @@
+{
+  "name": "matthlh-idle",
+  "owner": { "name": "matthlh" },
+  "description": "Token Tycoon, a Claude-themed idle game for Claude Code",
+  "plugins": [{ "name": "token-tycoon", "source": "./" }]
+}

@@ -1,0 +1,745 @@
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
+
+import type { Fx, GenId, Prefs, Save, ToolId } from '../types'
+
+// ── State ────────────────────────────────────────────────────────────────
+
+const PANE = 'token-tycoon'
+
+export const FRESH: Save = {
+  tokens: 0,
+  earned: 0,
+  lifetime: 0,
+  level: 0,
+  hp: 10,
+  clicks: 0,
+  cleared: 0,
+  owned: { agent: 0, subagent: 0, robot: 0, swarm: 0 },
+  model: 0,
+  infra: 0,
+  tools: { read: false, edit: false, bash: false, grep: false, web: false },
+  points: 0,
+  trained: 0,
+  bonusHits: 0,
+  savedAt: 0,
+}
+
+export const save = atom({ plugin: 'token-tycoon', key: 'save' } as const, { ...FRESH } as Save)
+export const fx = atom({ plugin: 'token-tycoon', key: 'fx' } as const, { at: 0, dmg: 0, isCrit: false, cleared: null, reward: 0 } as Fx)
+const isHidden = atom({ plugin: 'token-tycoon', key: 'isHidden' } as const, false)
+const prefs = atom({ plugin: 'token-tycoon', key: 'prefs' } as const, { popups: true } as Prefs)
+
+// ── The game ─────────────────────────────────────────────────────────────
+
+export const TASKS = [
+  'Fix a typo',
+  'Fix the flaky test',
+  'Add unit tests',
+  'Update the README',
+  'Rename a variable',
+  'Refactor auth',
+  'Fix the N+1 query',
+  'Resolve merge conflicts',
+  'Upgrade dependencies',
+  'Add dark mode',
+  'Migrate the database',
+  'Write the API docs',
+  'Delete node_modules',
+  'Debug prod at 3am',
+  'Ship v2',
+  'Rewrite it in Rust',
+  'Fix the CSS',
+  'Make the tests pass',
+  'Add a cache',
+  'Remove the cache',
+  'Scale to 1M users',
+  'Pass the security audit',
+  'Train a bigger model',
+  'Achieve AGI',
+]
+
+export type Gen = { id: GenId; label: string; dps: number; cost: number; hotkey: string }
+export const GENS: Gen[] = [
+  { id: 'agent', label: 'Agent', dps: 0.5, cost: 15, hotkey: '1' },
+  { id: 'subagent', label: 'Subagent', dps: 4, cost: 120, hotkey: '2' },
+  { id: 'robot', label: 'Robot', dps: 25, cost: 1300, hotkey: '3' },
+  { id: 'swarm', label: 'Agent swarm', dps: 150, cost: 14000, hotkey: '4' },
+]
+
+export type Tier = { label: string; mult: number; cost: number }
+export const MODELS: Tier[] = [
+  { label: 'Haiku', mult: 1, cost: 0 },
+  { label: 'Sonnet', mult: 3, cost: 50 },
+  { label: 'Opus', mult: 10, cost: 500 },
+  { label: 'Fable', mult: 30, cost: 5000 },
+  { label: 'Mythos', mult: 100, cost: 60000 },
+]
+export const INFRA: Tier[] = [
+  { label: 'Laptop', mult: 1, cost: 0 },
+  { label: 'GPU', mult: 2, cost: 300 },
+  { label: 'Rack', mult: 4, cost: 3000 },
+  { label: 'Data center', mult: 8, cost: 30000 },
+  { label: 'Cluster', mult: 16, cost: 300000 },
+]
+
+export type Tool = { id: ToolId; label: string; cost: number; desc: string; hotkey: string }
+export const TOOLS: Tool[] = [
+  { id: 'read', label: 'Read', cost: 100, desc: 'agents +25%', hotkey: 'r' },
+  { id: 'edit', label: 'Edit', cost: 400, desc: 'prompts +50%', hotkey: 'e' },
+  { id: 'bash', label: 'Bash', cost: 1500, desc: '20% double hit', hotkey: 'b' },
+  { id: 'grep', label: 'Grep', cost: 5000, desc: 'crit 5% → 15%', hotkey: 'g' },
+  { id: 'web', label: 'WebSearch', cost: 20000, desc: 'offline 2× longer', hotkey: 'w' },
+]
+
+export function modelAt(i: number): Tier {
+  return MODELS[Math.max(0, Math.min(MODELS.length - 1, i))] as Tier
+}
+export function infraAt(i: number): Tier {
+  return INFRA[Math.max(0, Math.min(INFRA.length - 1, i))] as Tier
+}
+
+export const CRIT_MULT = 10
+export const POINT_EVERY = 50000
+export const OFFLINE_RATE = 0.5
+export const OFFLINE_CAP_H = 4
+
+export function taskName(level: number): string {
+  const n = TASKS.length
+  const round = Math.floor(level / n)
+  return (TASKS[level % n] ?? '') + (round > 0 ? ` v${round + 1}` : '')
+}
+export function taskHp(level: number): number {
+  return Math.floor(10 * Math.pow(1.28, level))
+}
+export function taskReward(level: number): number {
+  return Math.floor(5 + taskHp(level) * 0.55)
+}
+export function prestigeMult(points: number): number {
+  return 1 + 0.5 * points
+}
+export function pointsFor(earned: number): number {
+  return Math.floor(Math.sqrt(earned / POINT_EVERY))
+}
+export function power(s: Save): number {
+  return modelAt(s.model).mult * (s.tools.edit ? 1.5 : 1) * prestigeMult(s.points)
+}
+export function critChance(s: Save): number {
+  return s.tools.grep ? 0.15 : 0.05
+}
+export function dps(s: Save): number {
+  const raw = GENS.reduce((sum, g) => sum + g.dps * (s.owned[g.id] ?? 0), 0)
+  return raw * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points)
+}
+export function genCost(g: Gen, owned: number): number {
+  return Math.ceil(g.cost * Math.pow(1.15, owned))
+}
+export function offlineCapMs(s: Save): number {
+  return OFFLINE_CAP_H * (s.tools.web ? 2 : 1) * 3600_000
+}
+
+export function fmt(n: number): string {
+  if (!Number.isFinite(n)) return '∞'
+  const abs = Math.abs(n)
+  if (abs < 10) return (Math.round(n * 10) / 10).toString()
+  if (abs < 1000) return Math.round(n).toString()
+  const units = ['K', 'M', 'B', 'T', 'Qa', 'Qi']
+  let v = abs
+  let i = -1
+  while (v >= 1000 && i < units.length - 1) {
+    v /= 1000
+    i++
+  }
+  const digits = v < 10 ? 2 : v < 100 ? 1 : 0
+  return (n < 0 ? '-' : '') + v.toFixed(digits) + units[i]
+}
+
+// Deals damage to the current task, rolling over into the next ones.
+export function damage(s: Save, amount: number): { s: Save; cleared: number; reward: number; last: string | null } {
+  let hp = s.hp - amount
+  let level = s.level
+  let tokens = s.tokens
+  let earned = s.earned
+  let lifetime = s.lifetime
+  let cleared = 0
+  let reward = 0
+  let last: string | null = null
+  while (hp <= 0 && cleared < 5000) {
+    const r = taskReward(level)
+    tokens += r
+    earned += r
+    lifetime += r
+    reward += r
+    last = taskName(level)
+    cleared++
+    level++
+    hp += taskHp(level)
+  }
+  if (hp <= 0) hp = taskHp(level)
+  return { s: { ...s, hp, level, tokens, earned, lifetime, cleared: s.cleared + cleared }, cleared, reward, last }
+}
+
+export function nextTier(list: Tier[], at: number): Tier | null {
+  return at + 1 < list.length ? (list[at + 1] as Tier) : null
+}
+
+// ── Art ──────────────────────────────────────────────────────────────────
+// Letter grids: '.' is transparent. The bot has two frames; the block cracks
+// as its HP drops and changes color with each task.
+
+const BOT_A = [
+  '...k....',
+  '.hhhhhh.',
+  '.hEhhEh.',
+  '.hhhhhh.',
+  '..bbbb..',
+  'wbbbbbbw',
+  '..bbbb..',
+  '..l..l..',
+  '..l..l..',
+]
+const BOT_B = [
+  '...k....',
+  '.hhhhhh.',
+  '.hEhhEh.',
+  '.hhhhhhw',
+  '..bbbbw.',
+  'wbbbbb..',
+  '..bbbb..',
+  '..l..l..',
+  '..l..l..',
+]
+const BLOCK = [
+  '.LLLLLLLL.',
+  'LFFFFFFFFD',
+  'LFFFFFFFFD',
+  'LFFFFFFFFD',
+  'LFFFFFFFFD',
+  'LFFFFFFFFD',
+  'LFFFFFFFFD',
+  'LFFFFFFFFD',
+  '.DDDDDDDD.',
+]
+// Crack pixels [x, y] added at each stage of damage.
+const CRACKS: [number, number][][] = [
+  [[4, 1], [4, 2], [5, 3]],
+  [[5, 4], [6, 5], [3, 4], [2, 5]],
+  [[6, 6], [7, 7], [1, 2], [2, 3], [7, 2]],
+  [[8, 1], [3, 6], [4, 7], [1, 6], [6, 2], [8, 5]],
+]
+export type Palette = Record<string, number>
+const BOT_PAL: Palette = { k: 0xd97757, h: 0xc9c4bb, E: 0x3fb8f0, b: 0xd97757, w: 0x8a8580, l: 0x6f6a64 }
+// One block color per task, cycling: [face, light, dark].
+const BLOCK_COLORS: [number, number, number][] = [
+  [0xd97757, 0xf0a284, 0x9a4d33], // Claude orange
+  [0x5b8def, 0x8fb3ff, 0x3457a8], // blue
+  [0x5cb85c, 0x8fe08f, 0x357a35], // green
+  [0xa06cd5, 0xc79cf2, 0x6a3f99], // purple
+  [0xe05a5a, 0xf59090, 0x9c3434], // red
+  [0xe0b43c, 0xf5d57a, 0x9c7a1f], // gold
+]
+const SPARK = 0xffe66d
+const CRACK = 0x2b2622
+
+export function crackStage(hp: number, max: number): number {
+  const lost = 1 - hp / Math.max(1, max)
+  return lost >= 0.8 ? 4 : lost >= 0.6 ? 3 : lost >= 0.4 ? 2 : lost >= 0.2 ? 1 : 0
+}
+
+function blockRows(stage: number): string[] {
+  const rows = BLOCK.map(r => r.split(''))
+  for (let i = 0; i < stage; i++) for (const [x, y] of CRACKS[i] ?? []) if (rows[y]) rows[y]![x] = 'C'
+  return rows.map(r => r.join(''))
+}
+
+function blockPal(level: number): Palette {
+  const [F, L, D] = BLOCK_COLORS[level % BLOCK_COLORS.length] ?? [0xd97757, 0xf0a284, 0x9a4d33]
+  return { F, L, D, C: CRACK }
+}
+
+export const SCENE_W = 28
+export const SCENE_H = 10
+const BOT_X = 2
+const BLOCK_X = 16
+const PX = 4
+
+type Pixels = (number | undefined)[]
+function plot(pixels: Pixels, rows: string[], x0: number, y0: number, pal: Palette) {
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const c = pal[row[x] ?? '.']
+      const px = x0 + x
+      const py = y0 + y
+      if (c !== undefined && px >= 0 && px < SCENE_W && py >= 0 && py < SCENE_H) pixels[py * SCENE_W + px] = c
+    }
+  })
+}
+
+// The scene as pixels: the bot, the block, and a spark while a hit lands.
+export function scenePixels(s: Save, f: Fx, now: number, frame: 0 | 1): Pixels {
+  const pixels: Pixels = new Array(SCENE_W * SCENE_H)
+  const hitting = now - f.at < 400
+  plot(pixels, frame ? BOT_B : BOT_A, BOT_X, 1, BOT_PAL)
+  plot(pixels, blockRows(crackStage(s.hp, taskHp(s.level))), BLOCK_X, 1, blockPal(s.level))
+  if (hitting) {
+    const sp = { S: SPARK }
+    plot(pixels, ['S.', '.S', 'S.'], BLOCK_X - 3, 3, sp)
+    if (f.isCrit) plot(pixels, ['.S', 'S.', '.S'], BLOCK_X - 5, 2, sp)
+  }
+  return pixels
+}
+
+const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
+
+export function sceneSvg(s: Save, f: Fx, now: number): string {
+  const w = SCENE_W * PX
+  const h = SCENE_H * PX
+  const hitting = now - f.at < 400
+  const justCleared = f.cleared && now - f.at < 1500
+  const rects = (pix: Pixels, skipX?: [number, number]) => {
+    let out = ''
+    for (let y = 0; y < SCENE_H; y++)
+      for (let x = 0; x < SCENE_W; x++) {
+        const c = pix[y * SCENE_W + x]
+        if (c === undefined) continue
+        if (skipX && x >= skipX[0] && x < skipX[1]) continue
+        out += `<rect x="${x * PX}" y="${y * PX}" width="${PX}" height="${PX}" fill="${hex(c)}"/>`
+      }
+    return out
+  }
+  const a = scenePixels(s, f, now, 0)
+  const b = scenePixels(s, f, now, 1)
+  const botA = rects(a, [BLOCK_X - 6, SCENE_W])
+  const botB = rects(b, [BLOCK_X - 6, SCENE_W])
+  const block = (() => {
+    let out = ''
+    for (let y = 0; y < SCENE_H; y++)
+      for (let x = BLOCK_X - 6; x < SCENE_W; x++) {
+        const c = a[y * SCENE_W + x]
+        if (c !== undefined) out += `<rect x="${x * PX}" y="${y * PX}" width="${PX}" height="${PX}" fill="${hex(c)}"/>`
+      }
+    return out
+  })()
+  const shake = hitting
+    ? `<animateTransform attributeName="transform" type="translate" values="0 0;${f.isCrit ? 3 : 2} 0;-1 0;0 0" dur="0.25s" begin="0s" repeatCount="1"/>`
+    : ''
+  const pop = hitting
+    ? `<text x="${(BLOCK_X + 5) * PX}" y="${3 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="${f.isCrit ? '#ffe66d' : '#ffffff'}" stroke="#000" stroke-width="2" paint-order="stroke">-${fmt(f.dmg)}${f.isCrit ? '!' : ''}<animate attributeName="y" from="${3 * PX}" to="${-2 * PX}" dur="0.9s" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="0.9s" begin="0s" fill="freeze"/></text>`
+    : justCleared
+      ? `<text x="${(BLOCK_X + 5) * PX}" y="${3 * PX}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="#8fe08f" stroke="#000" stroke-width="2" paint-order="stroke">+${fmt(f.reward)}<animate attributeName="y" from="${3 * PX}" to="${-2 * PX}" dur="1.4s" begin="0s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="1.4s" begin="0s" fill="freeze"/></text>`
+      : ''
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" shape-rendering="crispEdges" overflow="visible">` +
+    `<g>${botA}<animate attributeName="opacity" values="1;0" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>` +
+    `<g>${botB}<animate attributeName="opacity" values="0;1" dur="0.8s" calcMode="discrete" repeatCount="indefinite"/></g>` +
+    `<g>${block}${shake}</g>` +
+    pop +
+    `</svg>`
+  )
+}
+
+// Terminal: the scene as a Raster of half blocks, two pixels per cell.
+const DEFAULT = 0x01000000
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+function base64(bytes: Uint8Array): string {
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i] ?? 0, b = bytes[i + 1] ?? 0, c = bytes[i + 2] ?? 0
+    const n = (a << 16) | (b << 8) | c
+    out += B64.charAt((n >> 18) & 63) + B64.charAt((n >> 12) & 63)
+    out += i + 1 < bytes.length ? B64.charAt((n >> 6) & 63) : '='
+    out += i + 2 < bytes.length ? B64.charAt(n & 63) : '='
+  }
+  return out
+}
+
+export const SCENE_ROWS = SCENE_H / 2
+export function sceneCells(s: Save, f: Fx, now: number): string {
+  const pix = scenePixels(s, f, now, (Math.floor(now / 800) % 2) as 0 | 1)
+  const grid = new Uint32Array(SCENE_W * SCENE_ROWS * 3)
+  for (let row = 0; row < SCENE_ROWS; row++)
+    for (let x = 0; x < SCENE_W; x++) {
+      const top = pix[row * 2 * SCENE_W + x]
+      const bottom = pix[(row * 2 + 1) * SCENE_W + x]
+      const i = (row * SCENE_W + x) * 3
+      const [ch, fg, bg]: [number, number, number] =
+        top === undefined && bottom === undefined ? [0x20, DEFAULT, DEFAULT]
+        : top === undefined ? [0x2584, bottom as number, DEFAULT]
+        : [0x2580, top, bottom ?? DEFAULT]
+      grid[i] = ch
+      grid[i + 1] = fg
+      grid[i + 2] = bg
+    }
+  return base64(new Uint8Array(grid.buffer))
+}
+
+export function bar(frac: number, width: number): string {
+  const n = Math.round(Math.max(0, Math.min(1, frac)) * width)
+  return '█'.repeat(n) + '░'.repeat(width - n)
+}
+
+// ── Helpers that take the engine ─────────────────────────────────────────
+// Top-level declarations so a press never depends on one drawing's closure.
+
+function ignorePress() {}
+
+let dirty = false
+
+async function toast($: EngineInterface, text: string) {
+  if ((await read($, prefs)).popups) $.ui.toast(text)
+}
+
+async function commit($: EngineInterface, s: Save) {
+  await update($, save, () => s)
+  dirty = true
+}
+
+async function persist($: EngineInterface) {
+  const s = await read($, save)
+  const stamped = { ...s, savedAt: await $.clock.now() }
+  await update($, save, () => stamped)
+  await $.store.set('save', stamped)
+  dirty = false
+}
+
+// One prompt hit: from the button, a real tool call (free) or a finished turn (crit).
+async function hit($: EngineInterface, kind: 'click' | 'tool' | 'turn') {
+  const s0 = await read($, save)
+  const now = await $.clock.now()
+  const isCrit = kind === 'turn' || Math.random() < critChance(s0)
+  const twice = s0.tools.bash && Math.random() < 0.2
+  const dmg = power(s0) * (isCrit ? CRIT_MULT : 1) * (twice ? 2 : 1)
+  const r = damage(s0, dmg)
+  const s = {
+    ...r.s,
+    clicks: s0.clicks + (kind === 'click' ? 1 : 0),
+    bonusHits: s0.bonusHits + (kind === 'click' ? 0 : 1),
+  }
+  await commit($, s)
+  await update($, fx, () => ({ at: now, dmg, isCrit, cleared: r.last, reward: r.reward }))
+  if (r.cleared > 0 && kind !== 'click') {
+    const what = r.cleared === 1 ? `"${r.last}"` : `${r.cleared} tasks`
+    await toast($, `🤖 ${kind === 'turn' ? 'Turn crit' : 'Free hit'} cleared ${what} (+${fmt(r.reward)} ✦)`)
+  }
+}
+
+async function buyGen($: EngineInterface, id: GenId) {
+  const s = await read($, save)
+  const g = GENS.find(x => x.id === id)!
+  const cost = genCost(g, s.owned[id] ?? 0)
+  if (s.tokens < cost) return
+  await commit($, { ...s, tokens: s.tokens - cost, owned: { ...s.owned, [id]: (s.owned[id] ?? 0) + 1 } })
+}
+
+async function buyTier($: EngineInterface, which: 'model' | 'infra') {
+  const s = await read($, save)
+  const list = which === 'model' ? MODELS : INFRA
+  const next = nextTier(list, s[which])
+  if (!next || s.tokens < next.cost) return
+  await commit($, { ...s, tokens: s.tokens - next.cost, [which]: s[which] + 1 })
+  await toast($, which === 'model' ? `🧠 Upgraded to ${next.label}: prompts ×${next.mult}` : `🏭 ${next.label} online: agents ×${next.mult}`)
+}
+
+async function buyTool($: EngineInterface, id: ToolId) {
+  const s = await read($, save)
+  const t = TOOLS.find(x => x.id === id)!
+  if (s.tools[id] || s.tokens < t.cost) return
+  await commit($, { ...s, tokens: s.tokens - t.cost, tools: { ...s.tools, [id]: true } })
+}
+
+async function train($: EngineInterface) {
+  const s = await read($, save)
+  const gained = pointsFor(s.earned)
+  if (gained < 1) return
+  const points = s.points + gained
+  await commit($, { ...FRESH, points, trained: s.trained + 1, lifetime: s.lifetime, savedAt: s.savedAt })
+  await persist($)
+  await toast($, `✨ Trained a new model! ${points} point${points === 1 ? '' : 's'}: everything ×${prestigeMult(points)}`)
+}
+
+function summary(s: Save): string[] {
+  const max = taskHp(s.level)
+  const pts = pointsFor(s.earned)
+  return [
+    `Task ${s.level + 1}: ${taskName(s.level)}  ${bar(1 - s.hp / max, 10)} ${Math.round((1 - s.hp / max) * 100)}%  (${fmt(s.hp)} / ${fmt(max)} HP)`,
+    `✦ ${fmt(s.tokens)} tokens, +${fmt(dps(s))}/s, ⚡ ${fmt(power(s))} per prompt (${modelAt(s.model).label}, ${infraAt(s.infra).label}, crit ${Math.round(critChance(s) * 100)}%)`,
+    `Agents: ${GENS.map(g => `${s.owned[g.id] ?? 0} ${g.label.toLowerCase()}`).join(', ')}`,
+    `Tools: ${TOOLS.filter(t => s.tools[t.id]).map(t => t.label).join(', ') || 'none yet'}`,
+    `Prompts ${fmt(s.clicks)}, free hits from real work ${fmt(s.bonusHits)}, tasks cleared ${fmt(s.cleared)}, lifetime ✦ ${fmt(s.lifetime)}`,
+    `Models trained: ${s.trained} (${s.points} points, ×${prestigeMult(s.points)})${pts >= 1 ? `, ${pts} more ready to claim in the shop` : ''}`,
+  ]
+}
+
+// ── Hooks ────────────────────────────────────────────────────────────────
+
+export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    await $.command.register({ name: 'idle', description: 'Open the Claude Idle shop (and show your progress)' })
+
+    const stored = (await $.store.get('save')) as Partial<Save> | undefined
+    const p = (await $.store.get('prefs')) as Partial<Prefs> | undefined
+    if (p) await update($, prefs, x => ({ ...x, ...p }))
+    const now = await $.clock.now()
+    let s: Save = {
+      ...FRESH,
+      ...(stored ?? {}),
+      owned: { ...FRESH.owned, ...(stored?.owned ?? {}) },
+      tools: { ...FRESH.tools, ...(stored?.tools ?? {}) },
+    }
+
+    // Offline earnings: the agents kept working at half pace while you were away.
+    const rate = dps(s)
+    const away = s.savedAt ? Math.min(now - s.savedAt, offlineCapMs(s)) : 0
+    if (rate > 0 && away >= 60_000) {
+      const r = damage(s, rate * (away / 1000) * OFFLINE_RATE)
+      s = r.s
+      const mins = Math.round(away / 60_000)
+      const when = mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60 ? ` ${mins % 60}m` : ''}` : `${mins}m`
+      await toast($, `🤖 While you were away (${when}): ${r.cleared} task${r.cleared === 1 ? '' : 's'} cleared, +${fmt(r.reward)} ✦`)
+    }
+    await update($, save, () => s)
+    await persist($)
+
+    let ticks = 0
+    $.clock.every(1000, async () => {
+      ticks++
+      const cur = await read($, save)
+      const rate = dps(cur)
+      if (rate > 0) {
+        const r = damage(cur, rate)
+        await commit($, r.s)
+        if (r.cleared > 0) {
+          const t = await $.clock.now()
+          await update($, fx, () => ({ at: t - 400, dmg: 0, isCrit: false, cleared: r.last, reward: r.reward }))
+        }
+      }
+      if (dirty && ticks % 15 === 0) await persist($)
+    })
+
+    return next(e)
+  })
+
+  on('tool.call', async ($, e, next) => {
+    await hit($, 'tool').catch(() => {})
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    if (!e.isAborted) await hit($, 'turn')
+    await persist($)
+    return next(e)
+  })
+
+  on('command.run', { command: 'idle' }, async $ => {
+    await update($, isHidden, () => false)
+    const opened = await $.ui.open({ id: PANE, title: 'Claude Idle' })
+    const s = await read($, save)
+    return {
+      text: [opened.isPlaced ? 'Shop opened.' : 'Shop pane needs a wider window; here is where you stand:', ...summary(s)].join('\n'),
+    }
+  })
+
+  on('ui.press', { plugin: 'token-tycoon', element: 'prompt' }, async $ => {
+    await hit($, 'click')
+    return { element: 'prompt' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'shop' }, async $ => {
+    await $.ui.open({ id: PANE, title: 'Claude Idle' })
+    return { element: 'shop' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'hide' }, async $ => {
+    await update($, isHidden, () => true)
+    return { element: 'hide' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-agent' }, async $ => {
+    await buyGen($, 'agent')
+    return { element: 'buy-agent' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-subagent' }, async $ => {
+    await buyGen($, 'subagent')
+    return { element: 'buy-subagent' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-robot' }, async $ => {
+    await buyGen($, 'robot')
+    return { element: 'buy-robot' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-swarm' }, async $ => {
+    await buyGen($, 'swarm')
+    return { element: 'buy-swarm' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-model' }, async $ => {
+    await buyTier($, 'model')
+    return { element: 'buy-model' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-infra' }, async $ => {
+    await buyTier($, 'infra')
+    return { element: 'buy-infra' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-read' }, async $ => {
+    await buyTool($, 'read')
+    return { element: 'buy-read' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-edit' }, async $ => {
+    await buyTool($, 'edit')
+    return { element: 'buy-edit' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-bash' }, async $ => {
+    await buyTool($, 'bash')
+    return { element: 'buy-bash' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-grep' }, async $ => {
+    await buyTool($, 'grep')
+    return { element: 'buy-grep' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'buy-web' }, async $ => {
+    await buyTool($, 'web')
+    return { element: 'buy-web' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'train' }, async $ => {
+    await train($)
+    return { element: 'train' }
+  })
+  on('ui.press', { plugin: 'token-tycoon', element: 'popups' }, async $ => {
+    await update($, prefs, p => ({ ...p, popups: !p.popups }))
+    await $.store.set('prefs', await read($, prefs))
+    return { element: 'popups' }
+  })
+
+  // ── The band above the prompt ──
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey || (await read($, isHidden))) return next(e)
+    const { Box, Text, Button, Raster, Svg } = $.ui.resolve(e) as any
+    const now = await $.clock.now()
+    const s = await read($, save)
+    const f = await read($, fx)
+    const max = taskHp(s.level)
+    const done = 1 - s.hp / max
+    const columns = e.viewport?.columns ?? 80
+    const narrow = columns < 70
+
+    const art =
+      e.surface === 'terminal' ? (
+        <Raster key="scene" columns={SCENE_W} rows={SCENE_ROWS} cells={sceneCells(s, f, now)} />
+      ) : (
+        <Svg source={sceneSvg(s, f, now)} alt={`Claude Idle: ${taskName(s.level)} at ${Math.round(done * 100)}%`} width={SCENE_W * PX} height={SCENE_H * PX} isInteractive />
+      )
+    const justCleared = f.cleared && now - f.at < 1500
+
+    return (
+      <Box flexDirection="row" alignItems="center" columnGap={2} paddingX={1}>
+        {art}
+        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+          <Text wrap="truncate-end">
+            <Text bold>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
+            <Text dimColor>{`  #${s.level + 1}  `}</Text>
+            <Text color={done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : undefined}>{bar(done, narrow ? 8 : 14)}</Text>
+            <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
+          </Text>
+          <Text wrap="truncate-end">
+            <Text color="yellow">✦ {fmt(s.tokens)}</Text>
+            <Text dimColor>{`  +${fmt(dps(s))}/s  ⚡ ${fmt(power(s))}/hit`}</Text>
+            {!narrow && <Text dimColor>{`  ${modelAt(s.model).label} · ${infraAt(s.infra).label}`}</Text>}
+          </Text>
+        </Box>
+        <Box flexDirection="row" columnGap={1} flexShrink={0}>
+          <Button key="prompt" label="Prompt ⚡" hotkey="p" onPress={ignorePress} />
+          <Button key="shop" label="Shop" onPress={ignorePress} />
+          <Button key="hide" label="Hide" onPress={ignorePress} />
+        </Box>
+      </Box>
+    )
+  })
+
+  // ── The shop pane ──
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text, Button } = $.ui.resolve(e) as any
+    const s = await read($, save)
+    const p = await read($, prefs)
+    const max = taskHp(s.level)
+    const done = 1 - s.hp / max
+    const nextModel = nextTier(MODELS, s.model)
+    const nextInfra = nextTier(INFRA, s.infra)
+    const pts = pointsFor(s.earned)
+    const nextPointAt = POINT_EVERY * (pts + 1) * (pts + 1)
+
+    const row = (key: string, label: string, hotkey: string | undefined, cost: number | null, detail: string) => (
+      <Box flexDirection="row" columnGap={1}>
+        <Button key={key} label={label} hotkey={hotkey} dimColor={cost !== null && s.tokens < cost} onPress={ignorePress} />
+        <Text dimColor wrap="truncate-end">
+          {cost === null ? detail : `${fmt(cost)} ✦ · ${detail}`}
+        </Text>
+      </Box>
+    )
+
+    return (
+      <Box flexDirection="column" paddingX={1} rowGap={1}>
+        <Box flexDirection="column">
+          <Text>
+            <Text bold>{taskName(s.level)}</Text>
+            <Text dimColor>{`  task #${s.level + 1}`}</Text>
+          </Text>
+          <Text>
+            {bar(done, 20)} {Math.round(done * 100)}% <Text dimColor>({fmt(s.hp)} / {fmt(max)} HP, pays {fmt(taskReward(s.level))} ✦)</Text>
+          </Text>
+          <Text>
+            <Text color="yellow" bold>✦ {fmt(s.tokens)}</Text>
+            <Text>{`  +${fmt(dps(s))}/s  ⚡ ${fmt(power(s))} per prompt, crit ${Math.round(critChance(s) * 100)}% for ×${CRIT_MULT}`}</Text>
+          </Text>
+          <Box flexDirection="row" columnGap={1}>
+            <Button key="prompt" label="Prompt ⚡" hotkey="p" onPress={ignorePress} />
+            <Text dimColor>press p while the pane has focus</Text>
+          </Box>
+        </Box>
+
+        <Box flexDirection="column">
+          <Text bold>Agents <Text dimColor>(passive damage per second)</Text></Text>
+          {GENS.map(g => {
+            const n = s.owned[g.id] ?? 0
+            return row(`buy-${g.id}`, `${g.hotkey}: ${g.label}${n ? ` ×${n}` : ''}`, g.hotkey, genCost(g, n), `+${fmt(g.dps * infraAt(s.infra).mult * (s.tools.read ? 1.25 : 1) * prestigeMult(s.points))}/s each`)
+          })}
+        </Box>
+
+        <Box flexDirection="column">
+          <Text bold>Upgrades</Text>
+          {nextModel
+            ? row('buy-model', `m: Model → ${nextModel.label}`, 'm', nextModel.cost, `prompts ×${nextModel.mult} (now ${modelAt(s.model).label} ×${modelAt(s.model).mult})`)
+            : <Text dimColor>  Model: {modelAt(s.model).label} ×{modelAt(s.model).mult} (maxed)</Text>}
+          {nextInfra
+            ? row('buy-infra', `i: Infra → ${nextInfra.label}`, 'i', nextInfra.cost, `agents ×${nextInfra.mult} (now ${infraAt(s.infra).label} ×${infraAt(s.infra).mult})`)
+            : <Text dimColor>  Infra: {infraAt(s.infra).label} ×{infraAt(s.infra).mult} (maxed)</Text>}
+        </Box>
+
+        <Box flexDirection="column">
+          <Text bold>Tools</Text>
+          {TOOLS.map(t =>
+            s.tools[t.id]
+              ? <Text dimColor>  ✓ {t.label}: {t.desc}</Text>
+              : row(`buy-${t.id}`, `${t.hotkey}: ${t.label}`, t.hotkey, t.cost, t.desc),
+          )}
+        </Box>
+
+        <Box flexDirection="column">
+          <Text bold>Train a new model <Text dimColor>(prestige)</Text></Text>
+          {pts >= 1 ? (
+            <Box flexDirection="row" columnGap={1}>
+              <Button key="train" label={`t: Train (+${pts} point${pts === 1 ? '' : 's'})`} hotkey="t" onPress={ignorePress} />
+              <Text dimColor wrap="truncate-end">resets tokens, agents and upgrades; everything ×{prestigeMult(s.points + pts)} after</Text>
+            </Box>
+          ) : (
+            <Text dimColor>  earn {fmt(nextPointAt)} ✦ this run to train ({fmt(s.earned)} so far)</Text>
+          )}
+          <Text dimColor>  models trained: {s.trained}, points: {s.points} (×{prestigeMult(s.points)} to everything)</Text>
+        </Box>
+
+        <Box flexDirection="column">
+          <Text bold>Stats</Text>
+          <Text dimColor>  prompts {fmt(s.clicks)} · free hits from real work {fmt(s.bonusHits)} · tasks cleared {fmt(s.cleared)} · lifetime ✦ {fmt(s.lifetime)}</Text>
+          <Text dimColor>  every real tool call is a free hit; every finished turn is a crit; agents keep working while you're away (half pace, up to {OFFLINE_CAP_H * (s.tools.web ? 2 : 1)}h)</Text>
+          <Box flexDirection="row" columnGap={1}>
+            <Button key="popups" label={`Popups: ${p.popups ? 'On' : 'Off'}`} onPress={ignorePress} />
+          </Box>
+        </Box>
+      </Box>
+    )
+  })
+}
