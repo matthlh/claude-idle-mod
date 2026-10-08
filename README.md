@@ -1,5 +1,14 @@
 # Token Tycoon 🤖
 
+> **Moved.** Token Tycoon now lives in [matthlh/claude-mods](https://github.com/matthlh/claude-mods) under `plugins/token-tycoon`, next to Pixel Cat and the Purple Dark theme. Install it from there:
+>
+> ```
+> /plugin marketplace add matthlh/claude-mods
+> /plugin install token-tycoon@matthlh
+> ```
+>
+> This repository is archived and no longer updated. If you installed `token-tycoon@matthlh-idle` from here, uninstall it and reinstall from the new marketplace.
+
 A Claude-themed idle game that lives above your [Claude Code](https://claude.com/claude-code) prompt. A little coder in headphones sits beside a big token; every prompt earns tokens, agents earn them for you, the shop multiplies both, and your real Claude Code work counts too. Cookie Clicker, but the cookie is a token.
 
 ![The coder and the token: idle, a prompt landing, a crit, a frenzy](docs/preview.svg)
