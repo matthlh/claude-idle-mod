@@ -704,34 +704,36 @@ export const register: Register = on => {
     const barColor = done >= 0.8 ? 'green' : done >= 0.4 ? 'yellow' : 'cyan'
 
     return (
-      <Box flexDirection="row" alignItems="center" columnGap={2} paddingX={1}>
-        {art}
-        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-          <Text wrap="truncate-end">
-            <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
-            <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1}`}</Text>
-          </Text>
-          <Text wrap="truncate-end">
-            <Text color={barColor}>{bar(done, narrow ? 12 : 24)}</Text>
-            <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
-          </Text>
-          <Text wrap="truncate-end">
-            <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
-            <Text dimColor>{' tok'}</Text>
-            <Text dimColor>{'    '}</Text>
-            <Text color="green">{`+${fmt(dps(s))}`}</Text>
-            <Text dimColor>{'/sec'}</Text>
-            <Text dimColor>{'    '}</Text>
-            <Text>{`⚡ ${fmt(power(s))}`}</Text>
-            <Text dimColor>{'/prmt'}</Text>
-          </Text>
-        </Box>
-        <Box flexDirection="column" rowGap={0} flexShrink={0} alignItems="flex-end">
-          <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
-          <Box flexDirection="row" columnGap={1}>
-            <Button key="shop" label="Shop" onPress={ignorePress} />
+      <Box flexDirection="column" paddingX={1}>
+        <Box flexDirection="row" alignItems="center" columnGap={2}>
+          {art}
+          <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+            <Text wrap="truncate-end">
+              <Text bold color={justCleared ? 'green' : undefined}>{justCleared ? `✓ ${f.cleared}` : taskName(s.level)}</Text>
+              <Text dimColor>{justCleared ? `   +${fmt(f.reward)} ✦` : `   task ${s.level + 1}`}</Text>
+            </Text>
+            <Text wrap="truncate-end">
+              <Text color={barColor}>{bar(done, narrow ? 12 : 24)}</Text>
+              <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
+            </Text>
+            <Text wrap="truncate-end">
+              <Text color="yellow" bold>{`✦ ${fmt(s.tokens)}`}</Text>
+              <Text dimColor>{' tokens'}</Text>
+              <Text dimColor>{'    '}</Text>
+              <Text color="green">{`+${fmt(dps(s))}`}</Text>
+              <Text dimColor>{'/sec'}</Text>
+              <Text dimColor>{'    '}</Text>
+              <Text>{`⚡ ${fmt(power(s))}`}</Text>
+              <Text dimColor>{'/prompt'}</Text>
+            </Text>
+          </Box>
+          <Box flexShrink={0} alignSelf="flex-start">
             <Button key="hide" label="Hide" onPress={ignorePress} />
           </Box>
+        </Box>
+        <Box flexDirection="row" justifyContent="space-between">
+          <Button key="prompt" label="Prompt ⚡" variant="primary" hotkey="p" onPress={ignorePress} />
+          <Button key="shop" label="Shop" onPress={ignorePress} />
         </Box>
       </Box>
     )
@@ -805,9 +807,9 @@ export const register: Register = on => {
             <Text dimColor>{` ${Math.round(done * 100)}%`}</Text>
           </Text>
           <Box flexDirection="row" paddingTop={1} columnGap={2} flexWrap="wrap">
-            {stat('✦', fmt(s.tokens), 'tok', 'yellow')}
+            {stat('✦', fmt(s.tokens), 'tokens', 'yellow')}
             {stat('▲', `${fmt(dps(s))}`, '/sec', 'green')}
-            {stat('⚡', fmt(power(s)), '/prmt')}
+            {stat('⚡', fmt(power(s)), '/prompt')}
             {stat('✧', `${Math.round(critChance(s) * 100)}%`, `crit ×${CRIT_MULT}`)}
           </Box>
           <Box flexDirection="row" columnGap={1} paddingTop={1}>
